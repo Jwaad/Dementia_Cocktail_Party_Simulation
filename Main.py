@@ -14,6 +14,7 @@ from scipy.interpolate import interp1d
 import numpy as np
 import sys
 from PyQt5.QtWidgets import QApplication
+from lib.py import DragPoint
 
 
 class DementiaSimulator():
@@ -34,7 +35,6 @@ class DementiaSimulator():
         return dragPoints, dragPoints
 
     # Get DPI of screen
-
     def GetDPI(self):
         app = QApplication(sys.argv)
         screen = app.screens()[0]
