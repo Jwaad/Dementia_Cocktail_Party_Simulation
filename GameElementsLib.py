@@ -7,6 +7,9 @@ Created on Mon Jul 10 18:10:00 2023
 Contained within is the class that holds all the useful methods for the creation of the app, to control the dementia simulation.
 Run to "Main.py" To actually run the program
 """
+import pygame as pg
+import threading
+import cv2
 import time
 import pygame
 
@@ -72,7 +75,7 @@ class DragPoint():
 class InputBox:
 
     def __init__(self, x, y, w, h, text=''):
-        """THIS CLASS WAS FOUND ONLINE, I DIDNT WRITE IT.
+        """THIS CLASS WAS FOUND ONLINE,(I EDITED IT A BIT)
         SOURCE: https://stackoverflow.com/questions/46390231/how-can-i-create-a-text-input-box-with-pygame
 
         """
@@ -115,3 +118,126 @@ class InputBox:
         screen.blit(self.txt_surface, (self.rect.x+5, self.rect.y+5))
         # Blit the rect.
         pygame.draw.rect(screen, self.color, self.rect, 2)
+
+
+# bufferless VideoCapture
+class VideoCapture:
+    """
+    THIS CLASS WAS FOUND ONLINE, I DIDNT WRITE IT.
+    SOURCE: https://stackoverflow.com/questions/43665208/how-to-get-the-latest-frame-from-capture-device-camera-in-opencv
+    """
+
+    def __init__(self, name):
+        self.cap = cv2.VideoCapture(name)
+        self.lock = threading.Lock()
+        self.t = threading.Thread(target=self._reader)
+        self.t.daemon = True
+        self.t.start()
+
+    # grab frames as soon as they are available
+    def _reader(self):
+        while True:
+            with self.lock:
+                ret = self.cap.grab()
+            if not ret:
+                break
+
+    # retrieve latest frame
+    def read(self):
+        with self.lock:
+            _, frame = self.cap.retrieve()
+        return frame
+
+
+pg.init()
+
+
+class Checkbox:
+    """
+    THIS CLASS WAS FOUND ONLINE, I DIDNT WRITE IT.
+    SOURCE: https://stackoverflow.com/questions/38551168/radio-button-in-pygame
+    """
+
+    def __init__(self, surface, x, y, color=(230, 230, 230), caption="", outline_color=(0, 0, 0),
+                 check_color=(0, 0, 0), font_size=22, font_color=(0, 0, 0), text_offset=(28, 1)):
+        self.surface = surface
+        self.x = x
+        self.y = y
+        self.color = color
+        self.caption = caption
+        self.oc = outline_color
+        self.cc = check_color
+        self.fs = font_size
+        self.fc = font_color
+        self.to = text_offset
+        # checkbox object
+        self.checkbox_obj = pg.Rect(self.x, self.y, 12, 12)
+        self.checkbox_outline = self.checkbox_obj.copy()
+        # variables to test the different states of the checkbox
+        self.checked = False
+        self.active = False
+        self.unchecked = True
+        self.click = False
+
+    def _draw_button_text(self):
+        self.font = pg.font.Font(None, self.fs)
+        self.font_surf = self.font.render(self.caption, True, self.fc)
+        w, h = self.font.size(self.caption)
+        self.font_pos = (self.x + 12 / 2 - w / 2 +
+                         self.to[0], self.y + 12 / 2 - h / 2 + self.to[1])
+        self.surface.blit(self.font_surf, self.font_pos)
+
+    def render_checkbox(self):
+        if self.checked:
+            pg.draw.rect(self.surface, self.color, self.checkbox_obj)
+            pg.draw.rect(self.surface, self.oc, self.checkbox_outline, 1)
+            pg.draw.circle(self.surface, self.cc, (self.x + 6, self.y + 6), 4)
+
+        elif self.unchecked:
+            pg.draw.rect(self.surface, self.color, self.checkbox_obj)
+            pg.draw.rect(self.surface, self.oc, self.checkbox_outline, 1)
+        self._draw_button_text()
+
+    def _update(self, event_object):
+        x, y = event_object.pos
+        # self.x, self.y, 12, 12
+        px, py, w, h = self.checkbox_obj  # getting check box dimensions
+        if px < x < px + w and px < x < px + w:
+            self.active = True
+        else:
+            self.active = False
+
+    def _mouse_up(self):
+        if self.active and not self.checked and self.click:
+            self.checked = True
+        elif self.checked:
+            self.checked = False
+            self.unchecked = True
+
+        if self.click is True and self.active is False:
+            if self.checked:
+                self.checked = True
+            if self.unchecked:
+                self.unchecked = True
+            self.active = False
+
+    def update_checkbox(self, event_object):
+        if event_object.type == pg.MOUSEBUTTONDOWN:
+            self.click = True
+            # self._mouse_down()
+        if event_object.type == pg.MOUSEBUTTONUP:
+            self._mouse_up()
+        if event_object.type == pg.MOUSEMOTION:
+            self._update(event_object)
+
+    def is_checked(self):
+        if self.checked is True:
+            return True
+        else:
+            return False
+
+    def is_unchecked(self):
+        if self.checked is False:
+            return True
+        else:
+            return False

@@ -4,7 +4,7 @@ Created on Mon Jul 10 18:10:49 2023
 
 @author: Jwaad
 """
-
+import mtcnn
 import pygame
 from pygame.locals import *
 import matplotlib
@@ -16,8 +16,10 @@ import sys
 from PyQt5.QtWidgets import QApplication
 from GameElementsLib import DragPoint
 from GameElementsLib import InputBox
+from GameElementsLib import VideoCapture as VC
+from GameElementsLib import Checkbox
+import cv2 as cv
 import pickle
-import face_recognition
 
 
 class DementiaSimulator():
@@ -37,8 +39,37 @@ class DementiaSimulator():
         self.NoiseVolume = 0
         self.SpeakerTRF = None
         self.NoiseTRF = None
+        self.Stream = None
+        self.ShowCamera = True
+        self.UseStream = False
+        self.Detector = mtcnn.MTCNN()
+
+    # Detect Camera and establish a video stream
+    def StartCameraStream(self):
+        print("Starting Camera Stream. This might take a while...")
+        self.Stream = VC(0)
+        if not self.Stream.cap.isOpened():
+            print("Cannot open camera")
+
+    # Process frame
+    def ProcessFrame(self):
+        "Get latest frame, and count faces"
+        # Get latest frame
+        frame = self.Stream.read()
+        frame = cv.pyrDown(frame)  # Downscale for less lag
+        faces = self.Detector.detect_faces(frame)
+        # print(len(faces))
+        if self.ShowCamera:
+            for face in faces:
+                x, y, w, h = face['box']
+                cv.rectangle(frame, (x, y), ((x+w), (y+h)), (255, 0, 0), 3)
+            cv.imshow('Face Counter', frame)
+            if cv.waitKey(1) == ord('q'):
+                self.ShowCamera = False
+        return len(faces)
 
     # Use pickle to load our previously saved drag points
+
     def BackupLoadData(self):
         # USE DEFAULT CURVE IF COULDNT FIND SAVE
         speaker_Points = [90, 80, 70, 40, 10, 0]
@@ -271,10 +302,14 @@ class DementiaSimulator():
 
     # Main method
     def Main(self):
+
         # Initialise
+        self.StartCameraStream()
+        print("struck")
         self.InitScreen()
         self.CreateDragPoints()
         numberPeopleText = InputBox(575, 100, 50, 32)
+        useCameraToggle = Checkbox(self.Screen, 700, 100)
         self.StartAudio()  # Call on first loop to get %s to defaults
         numberOnScreen = self.NumberOnScreen
 
@@ -303,6 +338,17 @@ class DementiaSimulator():
                 for dragPoint in self.NoisePoints:
                     dragPoint.handle_event(event)
                     noisePointsPos.append(dragPoint.GetPercentageHeight())
+
+                useCameraToggle.update_checkbox(event)
+                if useCameraToggle.is_checked():
+                    self.UseStream = True
+                else:
+                    self.UseStream = False
+
+            # Display camera stream
+            if self.UseStream:
+                numFaces = self.ProcessFrame()
+                numberOnScreen = numFaces
 
             # If number on screen changed, change volume too
             if self.NumberOnScreen != numberOnScreen:
@@ -335,6 +381,7 @@ class DementiaSimulator():
                 dragPoint.Render(self.Screen)
             for dragPoint in self.NoisePoints:
                 dragPoint.Render(self.Screen)
+            useCameraToggle.render_checkbox()
 
             # Update display
             pygame.display.update()
