@@ -14,25 +14,36 @@ from scipy.interpolate import interp1d
 import numpy as np
 import sys
 from PyQt5.QtWidgets import QApplication
-from lib.py import DragPoint
+from GameElementsLib import DragPoint
+from GameElementsLib import InputBox
 
 
 class DementiaSimulator():
 
     def __init__(self):
         self.Running = True
-        self.NumberOnScreen = 0
+        self.NumberOnScreen = 1
         self.MinPeople = 1   # How many people have to be on screen, before we change the audio
-        self.MaxPeople = 10  # Num people on screen, where audio will be most transformed
+        self.MaxPeople = 15  # Num people on screen, where audio will be most transformed
         self.MonitorDPI = self.GetDPI()
-        self.SpeakerDragPoints = []
-        self.NoiseDragPoints = []
-        self.SpeakerDragPoints, self.NoiseDragPoints = self.LoadDragPoints()
+        self.SpeakerPointsPos, self.NoisePointsPos = self.LoadDragPoints()
+        self.FPS = 20
+        self.Clock = pygame.time.Clock()
+        self.SpeakerPoints = []
+        self.SpeakerVolume = 1
+        self.NoisePoints = []
+        self.NoiseVolume = 0
+        self.SaveDataDict = {}
+        self.SpeakerTRF = None
+        self.NoiseTRF = None
 
     # Use pickle to load our previously saved drag points
     def LoadDragPoints(self):
-        dragPoints = [[1, 90], [3, 80], [4, 70], [6, 40], [10, 0]]  # TEMP
-        return dragPoints, dragPoints
+        # Just y poitns of our various drag points
+        speaker_Points = [90, 80, 70, 40, 10, 0]
+        noise_points = speaker_Points.copy()
+        noise_points.reverse()
+        return speaker_Points, noise_points
 
     # Get DPI of screen
     def GetDPI(self):
@@ -51,6 +62,88 @@ class DementiaSimulator():
         pygame.display.set_caption('Dementia Simulator')
         self.Screen.fill(self.BackgroundColour)
         pygame.display.update()
+
+    def SpawnDragObjects(self, graphSize, origin_xy, dragPoints):
+        # Spawn drag points for speaker curve
+        origin_x = origin_xy[0]
+        origin_y = origin_xy[1]
+        # len -1 cause we want both 0 and 100 x
+        stepSize = graphSize[1] / (len(dragPoints) - 1)
+        i = 0
+        SpawnedPoints = []
+        graphStepSize = (self.MaxPeople - self.MinPeople) / \
+            (len(dragPoints) - 1)
+        for yGraphPos in dragPoints:
+            x_pos = origin_x + (stepSize * i)
+            # Convert from % to ypos
+            y_pos = origin_y + ((1 - (yGraphPos / 100)) * graphSize[0])
+            clampMin = origin_y
+            clampMax = origin_y + graphSize[0]
+            clamp = (clampMin, clampMax)
+            xGraphPos = self.MinPeople + (graphStepSize * i)
+            dragObject = DragPoint((x_pos, y_pos), clamp, xGraphPos)
+            SpawnedPoints.append(dragObject)
+            i += 1
+        return SpawnedPoints
+
+    # On both graphs, draw faint vertical line, showing current volume %
+    def VisualiseVolume(self, screen):
+        """Draws a line on both graphs, also writes the current volume %  above the line
+
+        Args:
+            screen (pygame.screen)
+        """
+        # Shared variables
+        font = pygame.font.Font('freesansbold.ttf', 20)
+        colour = (0, 100, 100)
+
+        lineHeight = 193  # Note this is hard coded in 2 places
+        graphWidth = 387
+        x_start = 88
+        stepSize = graphWidth / (self.MaxPeople - self.MinPeople)
+        if self.NumberOnScreen <= self.MinPeople:
+            x_pos = 0
+        elif self.NumberOnScreen >= self.MaxPeople:
+            x_pos = (self.MaxPeople - 1) * stepSize
+        else:
+            x_pos = (self.NumberOnScreen - self.MinPeople) * stepSize
+
+        # Speaker
+        y_origin = 105
+        pygame.draw.line(screen, colour, (x_start + x_pos, y_origin),
+                         (x_start + x_pos, (y_origin + lineHeight)), 2)
+        text = font.render('{}%'.format(
+            self.SpeakerVolume*100), True, colour)
+        textRect = text.get_rect()
+        textRect[0] = x_start + x_pos
+        textRect[1] = y_origin - (textRect[3])
+        screen.blit(text, textRect)
+
+        # Noise
+        y_origin = 430
+        pygame.draw.line(screen, colour, (x_start + x_pos, y_origin),
+                         (x_start + x_pos, (y_origin + lineHeight)), 2)
+        text = font.render('{}%'.format(
+            self.NoiseVolume*100), True, colour)
+        textRect = text.get_rect()
+        textRect[0] = x_start + x_pos
+        textRect[1] = y_origin - (textRect[3])
+        screen.blit(text, textRect)
+
+    # Spawn drag points for speaker and noise audio
+    def CreateDragPoints(self):
+        # Shared vars
+        graphSize = (193, 387)
+
+        self.SpeakerPoints = self.SpawnDragObjects(
+            graphSize, [88, 105], self.SpeakerPointsPos)
+        self.NoisePoints = self.SpawnDragObjects(
+            graphSize, [88, 430], self.NoisePointsPos)
+
+    # For debugging, read the pos of the mouse in the screen
+    def TrackMousePos(self, event):
+        if event.type == MOUSEMOTION:
+            print(event.pos)
 
     # Create a plot in matlab, and convert it into an image
     def CreateCurve(self, set_points, plot_size=[400, 200]):
@@ -74,7 +167,6 @@ class DementiaSimulator():
         x_data = np.round(np.arange(self.MinPeople, self.MaxPeople +
                                     step_size, step_size), 3)
         for x in x_data:
-            print(x)
             interp_y_data.append(trf(x))
 
         # Plot params
@@ -83,17 +175,17 @@ class DementiaSimulator():
         x_inches = plot_size[0] / self.MonitorDPI
         y_inches = plot_size[1] / self.MonitorDPI
         fig = pylab.figure(figsize=[x_inches, y_inches], dpi=self.MonitorDPI)
-        # fig.patch.set_facecolor("none")
         fig.tight_layout()
         ax = fig.gca()
         ax.margins(x=0, y=0)
         ax.spines[['right', 'top']].set_visible(False)
         ax.set_ylim(0, 100)
         ax.set_xticks(np.arange(self.MinPeople, self.MaxPeople + 1, 1))
-        # ax.axis("off")
+        ax.set_yticks(np.arange(0, 110, 10))
+        ax.grid()
 
         # Plot interpolated data
-        ax.plot(x_data, interp_y_data)
+        ax.plot(x_data, interp_y_data, linewidth=3.0)
 
         # Convert plot to pygame surface
         canvas = agg.FigureCanvasAgg(fig)
@@ -101,7 +193,7 @@ class DementiaSimulator():
         plot_array = np.asarray(canvas.buffer_rgba())
         plot = pygame.image.frombuffer(
             plot_array.tobytes(), plot_array.shape[1::-1], "RGBA")
-        return (plot)
+        return (plot, trf)
 
     # Draw the plot onto the surface of pygame
     def DrawPlot(self, plot, location):
@@ -112,37 +204,75 @@ class DementiaSimulator():
         self.Screen.fill(self.BackgroundColour)
 
     # Check quit
-    def CheckQuit(self):
-        for event in pygame.event.get():
-            # Quit on x pressed
-            if event.type == pygame.QUIT:
-                self.Running = False
+    def CheckQuit(self, event):
+        # Quit on x pressed
+        if event.type == pygame.QUIT:
+            self.Running = False
 
-    # Main loop
+    def OnNumPeopleChange():
+        pass
+
+    # Main method
     def Main(self):
-        # Initialise pygame
+        # Initialise
         self.InitScreen()
+        self.CreateDragPoints()
+        numberPeopleText = InputBox(575, 100, 50, 32)
 
-        # Create initial plots
-        speaker_volume_curve = self.CreateCurve(
-            self.Example_setpoint, plot_size=[500, 250])
-        noise_volume_curve = self.CreateCurve(
-            self.Example_setpoint, plot_size=[500, 250])
-
+        # Main loop
         while self.Running:
-            # Change vars based on UI touches (events)
-            pass
+
+            # Handle Events
+            events = pygame.event.get()
+            for event in events:
+                # self.TrackMousePos(event)
+                self.CheckQuit(event)
+                numberPeopleText.handle_event(event)
+                if numberPeopleText.returnInput != None:
+                    self.NumberOnScreen = int(numberPeopleText.returnInput)
+                # Allow drag points to be dragged
+                speakerPointsPos = []
+                for dragPoint in self.SpeakerPoints:
+                    dragPoint.handle_event(event)
+                    speakerPointsPos.append(dragPoint.Rect.y)
+                noisePointsPos = []
+                for dragPoint in self.NoisePoints:
+                    dragPoint.handle_event(event)
+                    noisePointsPos.append(dragPoint.Rect.y)
+
+            # If the Y of any of the points change, redraw curves
+            if self.SpeakerPointsPos != speakerPointsPos:
+                newSetPoints = []
+                for object in self.SpeakerPoints:
+                    newSetPoints.append(object.GetGraphPos())
+                speaker_volume_curve, self.SpeakerTRF = self.CreateCurve(
+                    newSetPoints, plot_size=[500, 250])
+                self.SpeakerPointsPos = speakerPointsPos
+
+            if self.NoisePointsPos != noisePointsPos:
+                newSetPoints = []
+                for object in self.NoisePoints:
+                    newSetPoints.append(object.GetGraphPos())
+                noise_volume_curve, self.NoiseTRF = self.CreateCurve(
+                    newSetPoints, plot_size=[500, 250])
+                self.NoisePointsPos = noisePointsPos
 
             # Draw on screen elements
             self.DrawBackground()
             self.DrawPlot(speaker_volume_curve, (25, 75))
             self.DrawPlot(noise_volume_curve, (25, 400))
+            self.VisualiseVolume(self.Screen)
+            numberPeopleText.draw(self.Screen)
+            for dragPoint in self.SpeakerPoints:
+                dragPoint.Render(self.Screen)
+            for dragPoint in self.NoisePoints:
+                dragPoint.Render(self.Screen)
 
             # Update display
             pygame.display.update()
 
-            # See if use quit program, or clicked the X
-            self.CheckQuit()
+            # Lock program to fps
+            self.Clock.tick(self.FPS)
 
 
 if __name__ == '__main__':
