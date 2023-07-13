@@ -16,6 +16,8 @@ import sys
 from PyQt5.QtWidgets import QApplication
 from GameElementsLib import DragPoint
 from GameElementsLib import InputBox
+import pickle
+import face_recognition
 
 
 class DementiaSimulator():
@@ -26,24 +28,43 @@ class DementiaSimulator():
         self.MinPeople = 1   # How many people have to be on screen, before we change the audio
         self.MaxPeople = 15  # Num people on screen, where audio will be most transformed
         self.MonitorDPI = self.GetDPI()
-        self.SpeakerPointsPos, self.NoisePointsPos = self.LoadDragPoints()
+        self.SpeakerPointsPos, self.NoisePointsPos = self.LoadData()
         self.FPS = 20
         self.Clock = pygame.time.Clock()
         self.SpeakerPoints = []
         self.SpeakerVolume = 1
         self.NoisePoints = []
         self.NoiseVolume = 0
-        self.SaveDataDict = {}
         self.SpeakerTRF = None
         self.NoiseTRF = None
 
     # Use pickle to load our previously saved drag points
-    def LoadDragPoints(self):
-        # Just y poitns of our various drag points
+    def BackupLoadData(self):
+        # USE DEFAULT CURVE IF COULDNT FIND SAVE
         speaker_Points = [90, 80, 70, 40, 10, 0]
         noise_points = speaker_Points.copy()
         noise_points.reverse()
         return speaker_Points, noise_points
+
+    # Use pickle to load our previously saved drag points
+    def LoadData(self):
+        print("Loading saved data...")
+        try:
+            save_data = pickle.load(open("data.pkl", "rb"))
+            speaker_Points = save_data["story"]
+            noise_points = save_data["noise"]
+        except Exception as e:
+            print("FAILED TO LOAD SAVE, USING DEFAULT PLOTS")
+            speaker_Points, noise_points = self.BackupLoadData()
+
+        return speaker_Points, noise_points
+
+    def SaveData(self):
+        print("Saving data...")
+        saveDict = {}
+        saveDict["story"] = self.SpeakerPointsPos
+        saveDict["noise"] = self.NoisePointsPos
+        pickle.dump(saveDict, open("data.pkl", "wb"))
 
     # Get DPI of screen
     def GetDPI(self):
@@ -58,7 +79,7 @@ class DementiaSimulator():
         self.BackgroundColour = (155, 155, 155)
         (width, height) = (1000, 800)
         pygame.init()
-        self.Screen = pygame.display.set_mode((width, height))  # , DOUBLEBUF)
+        self.Screen = pygame.display.set_mode((width, height))
         pygame.display.set_caption('Dementia Simulator')
         self.Screen.fill(self.BackgroundColour)
         pygame.display.update()
@@ -113,7 +134,7 @@ class DementiaSimulator():
         pygame.draw.line(screen, colour, (x_start + x_pos, y_origin),
                          (x_start + x_pos, (y_origin + lineHeight)), 2)
         text = font.render('{}%'.format(
-            self.SpeakerVolume*100), True, colour)
+            self.SpeakerVolume), True, colour)
         textRect = text.get_rect()
         textRect[0] = x_start + x_pos
         textRect[1] = y_origin - (textRect[3])
@@ -124,7 +145,7 @@ class DementiaSimulator():
         pygame.draw.line(screen, colour, (x_start + x_pos, y_origin),
                          (x_start + x_pos, (y_origin + lineHeight)), 2)
         text = font.render('{}%'.format(
-            self.NoiseVolume*100), True, colour)
+            self.NoiseVolume), True, colour)
         textRect = text.get_rect()
         textRect[0] = x_start + x_pos
         textRect[1] = y_origin - (textRect[3])
@@ -159,6 +180,7 @@ class DementiaSimulator():
             x_data.append(data_pos[0])
             y_data.append(data_pos[1])
 
+        # Interpolate
         trf = interp1d(x_data, y_data, 'cubic')
 
         # Create new plot using our TRF, in our min and max range
@@ -208,9 +230,44 @@ class DementiaSimulator():
         # Quit on x pressed
         if event.type == pygame.QUIT:
             self.Running = False
+            self.OnExit()
 
-    def OnNumPeopleChange():
-        pass
+    def OnNumPeopleChange(self, newNum):
+        # If num not in range, dont do anything
+        if newNum <= self.MinPeople:
+            newNum = self.MinPeople
+        elif newNum >= self.MaxPeople:
+            newNum = self.MaxPeople
+        self.SpeakerVolume = self.SpeakerTRF(newNum)
+        self.NoiseVolume = self.NoiseTRF(newNum)
+        self.NumberOnScreen = newNum
+        self.channel1.set_volume(self.SpeakerVolume/100)
+        self.channel2.set_volume(self.NoiseVolume/100)
+        # update audio
+
+    def StartAudio(self):
+        """
+        Get default volumes from our dragables
+        Begin both audio tracks at default volumes
+        """
+        self.SpeakerVolume = (self.SpeakerPointsPos[0])
+        self.NoiseVolume = (self.NoisePointsPos[0])
+
+        pygame.mixer.init(frequency=44100, size=-16, channels=1, buffer=2**12)
+        # create separate Channel objects for simultaneous playback
+        self.channel1 = pygame.mixer.Channel(0)  # argument must be int
+        self.channel2 = pygame.mixer.Channel(1)
+
+        self.channel1.set_volume(self.SpeakerVolume/100)
+        self.channel2.set_volume(self.NoiseVolume/100)
+        story = pygame.mixer.Sound("audio/story.mp3")
+        noise = pygame.mixer.Sound("audio/noise.mp3")
+        self.channel1.play(story, loops=-1)
+        self.channel2.play(noise, loops=-1)
+
+    # Do some stuff on exit
+    def OnExit(self):
+        self.SaveData()
 
     # Main method
     def Main(self):
@@ -218,6 +275,11 @@ class DementiaSimulator():
         self.InitScreen()
         self.CreateDragPoints()
         numberPeopleText = InputBox(575, 100, 50, 32)
+        self.StartAudio()  # Call on first loop to get %s to defaults
+        numberOnScreen = self.NumberOnScreen
+
+        # Workaround: Forces our first loop to calculate plots
+        self.SpeakerPointsPos, self.NoisePointsPos = [], []
 
         # Main loop
         while self.Running:
@@ -227,18 +289,24 @@ class DementiaSimulator():
             for event in events:
                 # self.TrackMousePos(event)
                 self.CheckQuit(event)
+                # numberOnScreen = camerafeedoutput
                 numberPeopleText.handle_event(event)
                 if numberPeopleText.returnInput != None:
-                    self.NumberOnScreen = int(numberPeopleText.returnInput)
+                    numberOnScreen = int(numberPeopleText.returnInput)
+
                 # Allow drag points to be dragged
                 speakerPointsPos = []
                 for dragPoint in self.SpeakerPoints:
                     dragPoint.handle_event(event)
-                    speakerPointsPos.append(dragPoint.Rect.y)
+                    speakerPointsPos.append(dragPoint.GetPercentageHeight())
                 noisePointsPos = []
                 for dragPoint in self.NoisePoints:
                     dragPoint.handle_event(event)
-                    noisePointsPos.append(dragPoint.Rect.y)
+                    noisePointsPos.append(dragPoint.GetPercentageHeight())
+
+            # If number on screen changed, change volume too
+            if self.NumberOnScreen != numberOnScreen:
+                self.OnNumPeopleChange(numberOnScreen)
 
             # If the Y of any of the points change, redraw curves
             if self.SpeakerPointsPos != speakerPointsPos:
