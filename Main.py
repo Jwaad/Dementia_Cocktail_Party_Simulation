@@ -42,10 +42,11 @@ class DementiaSimulator():
         self.Stream = None
         self.ShowCamera = True
         self.UseStream = False
-        self.Detector = mtcnn.MTCNN()
+        self.Detector = None
 
     # Detect Camera and establish a video stream
     def StartCameraStream(self):
+        self.Detector = mtcnn.MTCNN()
         print("Starting Camera Stream. This might take a while...")
         self.Stream = VC(0)
         if not self.Stream.cap.isOpened():
