@@ -102,8 +102,19 @@ class InputBox:
             self.color = self.COLOR_ACTIVE if self.active else self.COLOR_INACTIVE
         if event.type == pygame.KEYDOWN:
             if self.active:
+                allowed_chars = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
                 if event.key == pygame.K_RETURN:
+                    # Check all chars are letters not numbers
+                    rectified_text = ""
+                    for char in self.text:
+                        if char in allowed_chars:
+                            rectified_text.append(char)
+                    self.text = rectified_text
+                    # Handle sending an empty string
                     self.returnInput = self.text
+                    if self.text = "":
+                        self.returnInput = None
+                    # Reset text for next input
                     self.text = ''
                 elif event.key == pygame.K_BACKSPACE:
                     self.text = self.text[:-1]
