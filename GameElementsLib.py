@@ -75,7 +75,7 @@ class DragPoint():
 class InputBox:
 
     def __init__(self, x, y, w, h, text=''):
-        """THIS CLASS WAS FOUND ONLINE,(I EDITED IT A BIT)
+        """THIS CLASS WAS FOUND ONLINE,(I EDITED IT QUITE A BIT)
         SOURCE: https://stackoverflow.com/questions/46390231/how-can-i-create-a-text-input-box-with-pygame
 
         """
@@ -102,17 +102,18 @@ class InputBox:
             self.color = self.COLOR_ACTIVE if self.active else self.COLOR_INACTIVE
         if event.type == pygame.KEYDOWN:
             if self.active:
-                allowed_chars = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+                allowed_chars = ["0", "1", "2", "3",
+                                 "4", "5", "6", "7", "8", "9"]
                 if event.key == pygame.K_RETURN:
                     # Check all chars are letters not numbers
                     rectified_text = ""
                     for char in self.text:
                         if char in allowed_chars:
-                            rectified_text.append(char)
+                            rectified_text += char
                     self.text = rectified_text
                     # Handle sending an empty string
                     self.returnInput = self.text
-                    if self.text = "":
+                    if self.text == "":
                         self.returnInput = None
                     # Reset text for next input
                     self.text = ''
