@@ -26,6 +26,7 @@ class DementiaSimulator():
 
     def __init__(self):
         self.Running = True
+        self.Crowdedness
         self.NumberOnScreen = 1
         self.MinPeople = 1   # How many people have to be on screen, before we change the audio
         self.MaxPeople = 15  # Num people on screen, where audio will be most transformed
@@ -43,6 +44,7 @@ class DementiaSimulator():
         self.ShowCamera = True
         self.UseStream = False
         self.Detector = None
+        self.OpenFigures = []
 
     # Detect Camera and establish a video stream
     def StartCameraStream(self):
@@ -139,9 +141,9 @@ class DementiaSimulator():
             i += 1
         return SpawnedPoints
 
-    # On both graphs, draw faint vertical line, showing current volume %
-    def VisualiseVolume(self, screen):
-        """Draws a line on both graphs, also writes the current volume %  above the line
+    # Draw faint vertical line, showing current volume %
+    def DrawGraphStats(self, screen):
+        """Draws a line on graph and writes the current volume % above the line
 
         Args:
             screen (pygame.screen)
@@ -172,6 +174,7 @@ class DementiaSimulator():
         textRect[1] = y_origin - (textRect[3])
         screen.blit(text, textRect)
 
+        """
         # Noise
         y_origin = 430
         pygame.draw.line(screen, colour, (x_start + x_pos, y_origin),
@@ -182,6 +185,7 @@ class DementiaSimulator():
         textRect[0] = x_start + x_pos
         textRect[1] = y_origin - (textRect[3])
         screen.blit(text, textRect)
+        """
 
     # Spawn drag points for speaker and noise audio
     def CreateDragPoints(self):
@@ -222,6 +226,12 @@ class DementiaSimulator():
                                     step_size, step_size), 3)
         for x in x_data:
             interp_y_data.append(trf(x))
+
+        # Clear old plots:
+        if self.OpenFigures != []:
+            for i in range(len(self.OpenFigures) - 1, - 1, - 1,):
+                fig = self.OpenFigures.pop(i)
+                matplotlib.pyplot.close(fig)
 
         # Plot params
         matplotlib.use("Agg")
@@ -305,8 +315,7 @@ class DementiaSimulator():
     def Main(self):
 
         # Initialise
-        self.StartCameraStream()
-        print("struck")
+        # self.StartCameraStream()
         self.InitScreen()
         self.CreateDragPoints()
         numberPeopleText = InputBox(575, 100, 50, 32)
@@ -325,7 +334,6 @@ class DementiaSimulator():
             for event in events:
                 # self.TrackMousePos(event)
                 self.CheckQuit(event)
-                # numberOnScreen = camerafeedoutput
                 numberPeopleText.handle_event(event)
                 if numberPeopleText.returnInput != None:
                     numberOnScreen = int(numberPeopleText.returnInput)
@@ -340,6 +348,7 @@ class DementiaSimulator():
                     dragPoint.handle_event(event)
                     noisePointsPos.append(dragPoint.GetPercentageHeight())
 
+                # Let use activate camera with button
                 useCameraToggle.update_checkbox(event)
                 if useCameraToggle.is_checked():
                     self.UseStream = True
@@ -363,7 +372,6 @@ class DementiaSimulator():
                 speaker_volume_curve, self.SpeakerTRF = self.CreateCurve(
                     newSetPoints, plot_size=[500, 250])
                 self.SpeakerPointsPos = speakerPointsPos
-
             if self.NoisePointsPos != noisePointsPos:
                 newSetPoints = []
                 for object in self.NoisePoints:
@@ -376,7 +384,7 @@ class DementiaSimulator():
             self.DrawBackground()
             self.DrawPlot(speaker_volume_curve, (25, 75))
             self.DrawPlot(noise_volume_curve, (25, 400))
-            self.VisualiseVolume(self.Screen)
+            self.DrawGraphStats(self.Screen)
             numberPeopleText.draw(self.Screen)
             for dragPoint in self.SpeakerPoints:
                 dragPoint.Render(self.Screen)
@@ -392,5 +400,6 @@ class DementiaSimulator():
 
 
 if __name__ == '__main__':
+    print("Starting. This may take a while...")
     dementiaSim = DementiaSimulator()
     dementiaSim.Main()
