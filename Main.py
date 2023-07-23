@@ -34,7 +34,7 @@ class DementiaSimulator():
         self.MaxPeople = 16  # Num people on screen, where audio will be most transformed
         self.MonitorDPI = self.GetDPI()
         self.SpeakerPointsPos, self.NoisePointsPos = self.LoadData()
-        self.FPS = 20
+        self.FPS = 60
         self.Clock = pygame.time.Clock()
         self.SpeakerPoints = []
         self.SpeakerVolume = 1
