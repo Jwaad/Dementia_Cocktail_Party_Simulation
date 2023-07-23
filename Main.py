@@ -348,7 +348,7 @@ class DementiaSimulator():
     def Main(self):
 
         # Initialise
-        # self.StartCameraStream()
+        self.StartCameraStream()
         self.InitScreen()
         self.CreateDragPoints()
         numberPeopleText = InputBox(575, 100, 50, 32)
