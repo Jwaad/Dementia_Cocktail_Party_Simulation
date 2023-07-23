@@ -67,16 +67,15 @@ class DementiaSimulator():
         hairRects = 5
         crowdedness = 0.5
 
-        """
         if self.ShowCamera:
-            for rect in hairRects:
-                x, y, w, h = face['box']
-                cv.rectangle(frame, (x, y), ((x+w), (y+h)), (255, 0, 0), 3)
-            cv.imshow('Face Counter', frame)
+            #for rect in hairRects:
+            #    x, y, w, h = face['box']
+            #    cv.rectangle(frame, (x, y), ((x+w), (y+h)), (255, 0, 0), 3)
+            cv.imshow('Camera Feed', frame)
             if cv.waitKey(1) == ord('q'):
                 self.ShowCamera = False
-        """
-        return len(hairRects), crowdedness
+
+        return hairRects, crowdedness
 
     # Use pickle to load our previously saved drag points
     def BackupLoadData(self):
