@@ -4,6 +4,9 @@ Created on Mon Jul 10 18:10:49 2023
 
 @author: Jwaad
 """
+
+import sys
+import pickle
 import pygame
 from pygame.locals import *
 import matplotlib
@@ -11,14 +14,12 @@ import matplotlib.backends.backend_agg as agg
 import pylab
 from scipy.interpolate import interp1d
 import numpy as np
-import sys
 from PyQt5.QtWidgets import QApplication
 from GameElementsLib import DragPoint
 from GameElementsLib import InputBox
 from GameElementsLib import VideoCapture as VC
 from GameElementsLib import Checkbox
 import cv2 as cv
-import pickle
 
 
 class DementiaSimulator():
