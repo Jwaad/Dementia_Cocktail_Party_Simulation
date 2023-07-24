@@ -143,12 +143,11 @@ class DementiaSimulator():
         for yGraphPos in dragPoints:
             x_pos = origin_x + (stepSize * i)
             # Convert from % to ypos
-            y_pos = origin_y + ((1 - (yGraphPos / 100)) * graphSize[0])
             clampMin = origin_y
             clampMax = origin_y + graphSize[0]
             clamp = (clampMin, clampMax)
             xGraphPos = min + (graphStepSize * i)
-            dragObject = DragPoint((x_pos, y_pos), clamp, xGraphPos)
+            dragObject = DragPoint(x_pos, yGraphPos, clamp, xGraphPos)
             SpawnedPoints.append(dragObject)
             i += 1
         return SpawnedPoints

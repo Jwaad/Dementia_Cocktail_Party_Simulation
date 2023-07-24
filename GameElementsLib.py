@@ -52,22 +52,24 @@ class Button:
 
 class DragPoint():
 
-    def __init__(self, position, clampRange, xGraphPos):
+    def __init__(self, x_position, y_percentage, clampRange, xGraphPos):
         """Creates a dragable. 10x10 red square, 
         that returns it's position in regards to 
         the graph it's sort of attached to.
 
         Args:
-            position (List / Tuple): X and Y values of top left of square
+            x_position (Float): X pos in pixels
+            y_percentage (Float): percetage between clamp min and max 
             clampRange (List / Tuple): Min and Max Y values, the square is allowed to move. X is disabled
             xGraphPos (Float / Int): The X position in regards to the graph. not it's position on screen
         """
         self.ID = time.time
         size = (10, 10)  # 10 pix by 10
-        self.Rect = pygame.rect.Rect(
-            (position[0] - (size[0]/2)), (position[1] - (size[1]/2)), size[0], size[1])
         self.ClampRange = clampRange
         self.x = xGraphPos  # It's X value in respect to the curve
+        y_position = self.ConvertPercentToPosition(y_percentage)
+        self.Rect = pygame.rect.Rect(
+            (x_position - (size[0]/2)), (y_position - (size[1]/2)), size[0], size[1])
         self.BeingDragged = False
 
     # Move the pos of this rect, depending on drag + clamp ranges
@@ -97,14 +99,23 @@ class DragPoint():
 
     # Return the % of this objects position, between its min and max clamp. E.G. 50 / 100 = 0.5
     def GetPercentageHeight(self):
-        percentHeight = ((1 - (
-            self.Rect.y - self.ClampRange[0]) / (self.ClampRange[1] - self.ClampRange[0])) * 100)
+        clamp_length = self.ClampRange[1] - self.ClampRange[0]
+        percentHeight = (1 - ((self.Rect.y - self.ClampRange[0]) / clamp_length) ) * 100 # this percentage is flipped cause pygame y0 = top left
         if percentHeight > 100:
             percentHeight = 100
         elif percentHeight < 0 :
             percentHeight = 0
         return percentHeight
 
+    def ConvertPercentToPosition(self, percentage):
+        if percentage > 100:
+            percentage = 100
+        elif percentage < 0 :
+            percentage = 0
+        clamp_length = self.ClampRange[1] - self.ClampRange[0]
+        y_pos = (self.ClampRange[0] + ( (1 - (percentage / 100)) * clamp_length))
+        return y_pos
+    
     # Return X and Y coordinates in respect to it's graph placement
     def GetGraphPos(self):
         x = self.x
