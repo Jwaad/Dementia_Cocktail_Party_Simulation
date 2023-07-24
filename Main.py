@@ -53,6 +53,7 @@ class DementiaSimulator():
         self.AudioPath = "audio/"
         self.NoiseFileName = "noise5.wav"
         self.SpeechFileName = "speech.wav"
+        self.graphSize = [197, 387]
 
     # Detect Camera and establish a video stream
     def StartCameraStream(self):
@@ -162,8 +163,8 @@ class DementiaSimulator():
         # Shared variables
         font = pygame.font.Font('freesansbold.ttf', 20)
         colour = (0, 100, 100)
-        lineHeight = 193  # Note this is hard coded in 2 places
-        graphWidth = 387
+        lineHeight = self.graphSize[0] # 193 
+        graphWidth = self.graphSize[1] # 387
         x_start = 88
 
         # Step size for Speaker volume
@@ -215,13 +216,10 @@ class DementiaSimulator():
 
     # Spawn drag points for speaker and noise audio
     def CreateDragPoints(self):
-        # Shared vars
-        graphSize = (193, 387)
-
         self.SpeakerPoints = self.SpawnDragObjects(
-            graphSize, [88, 105], self.SpeakerPointsPos, self.MinPeople, self.MaxPeople)
+            self.graphSize, [88, 105], self.SpeakerPointsPos, self.MinPeople, self.MaxPeople)
         self.NoisePoints = self.SpawnDragObjects(
-            graphSize, [88, 430], self.NoisePointsPos, self.CrowdednessMin, self.CrowdednessMax)
+            self.graphSize, [88, 430], self.NoisePointsPos, self.CrowdednessMin, self.CrowdednessMax)
 
     # For debugging, read the pos of the mouse in the screen
     def TrackMousePos(self, event):
@@ -288,6 +286,7 @@ class DementiaSimulator():
         plot_array = np.asarray(canvas.buffer_rgba())
         plot = pygame.image.frombuffer(
             plot_array.tobytes(), plot_array.shape[1::-1], "RGBA")
+        self.OpenFigures.append(fig)
         return (plot, trf)
 
     # Draw the plot onto the surface of pygame
@@ -370,7 +369,6 @@ class DementiaSimulator():
 
         # Main loop
         while self.Running:
-
             # Handle Events
             events = pygame.event.get()
             for event in events:
