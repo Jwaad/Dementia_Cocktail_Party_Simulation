@@ -25,6 +25,7 @@ import cv2 as cv
 class DementiaSimulator():
 
     def __init__(self):
+        # TODO ADD A CHECK FOR MP3 OR .WAV and CHANGE THE FILE NAME ACCORDINGLY
         self.Running = True
         self.Crowdedness = 0
         self.CrowdednessMin = 0
@@ -49,6 +50,9 @@ class DementiaSimulator():
         self.Detector = None
         self.OpenFigures = []
         self.BackgroundImage = None
+        self.AudioPath = "audio/"
+        self.NoiseFileName = "noise5.wav"
+        self.SpeechFileName = "speech.wav"
 
     # Detect Camera and establish a video stream
     def StartCameraStream(self):
@@ -336,8 +340,8 @@ class DementiaSimulator():
 
         self.channel1.set_volume(self.SpeakerVolume/100)
         self.channel2.set_volume(self.NoiseVolume/100)
-        story = pygame.mixer.Sound("audio/story.mp3")
-        noise = pygame.mixer.Sound("audio/noise.mp3")
+        story = pygame.mixer.Sound(self.AudioPath + self.SpeechFileName)
+        noise = pygame.mixer.Sound(self.AudioPath + self.NoiseFileName)
         self.channel1.play(story, loops=-1)
         self.channel2.play(noise, loops=-1)
 
