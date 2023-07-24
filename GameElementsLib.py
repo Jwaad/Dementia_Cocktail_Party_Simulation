@@ -14,6 +14,42 @@ import time
 import pygame
 
 
+class Button:
+    """Gotten online: Grepper answer https://www.google.com/search?q=pygame+button&rlz=1C1ONGR_en-GBGB993GB993&oq=pygame+button&aqs=chrome..69i57j0i512l9.1554j0j4&sourceid=chrome&ie=UTF-8    
+    """
+    def __init__(self, x, y, height, width, text, border = 1, curve = 0, textColour = (255,255,255), colour = (50,50,0), font_size = 12):
+        self.x = x
+        self.y = y
+        self.height = height
+        self.width = width
+        self.colour = colour
+        self.border = border
+        self.curve = curve
+        self.text = text
+        self.textColour = textColour
+        self.font = pygame.font.Font('freesansbold.ttf', font_size)
+        self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
+        
+
+    def Render(self, screen):
+        pygame.draw.rect(screen, self.colour, self.rect, self.border, self.curve)
+        if self.text != "":
+            self.drawText(screen)
+        pygame.display.flip()
+
+        
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(event.pos):
+                return True
+        return False
+    
+    def drawText(self, screen):
+        text_surf = self.font.render(self.text, True, self.textColour)
+        text_rect = text_surf.get_rect(center=(self.x+self.width//2, self.y+self.height//2))
+        screen.blit(text_surf, text_rect)
+    
+
 class DragPoint():
 
     def __init__(self, position, clampRange, xGraphPos):
@@ -63,6 +99,10 @@ class DragPoint():
     def GetPercentageHeight(self):
         percentHeight = ((1 - (
             self.Rect.y - self.ClampRange[0]) / (self.ClampRange[1] - self.ClampRange[0])) * 100)
+        if percentHeight > 100:
+            percentHeight = 100
+        elif percentHeight < 0 :
+            percentHeight = 0
         return percentHeight
 
     # Return X and Y coordinates in respect to it's graph placement
@@ -162,8 +202,6 @@ class VideoCapture:
 
 
 pg.init()
-
-
 class Checkbox:
     """
     THIS CLASS WAS FOUND ONLINE, I DIDNT WRITE IT.
@@ -253,3 +291,5 @@ class Checkbox:
             return True
         else:
             return False
+
+
