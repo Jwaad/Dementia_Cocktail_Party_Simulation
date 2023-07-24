@@ -53,7 +53,7 @@ class DementiaSimulator():
         self.AudioPath = "audio/"
         self.NoiseFileName = "noise5.wav"
         self.SpeechFileName = "speech.wav"
-        self.graphSize = [197, 387]
+        self.graphSize = [195, 387]
 
     # Detect Camera and establish a video stream
     def StartCameraStream(self):
@@ -109,6 +109,7 @@ class DementiaSimulator():
         saveDict = {}
         saveDict["story"] = self.SpeakerPointsPos
         saveDict["noise"] = self.NoisePointsPos
+        print(saveDict)
         pickle.dump(saveDict, open("data.pkl", "wb"))
 
     # Get DPI of screen
@@ -216,9 +217,9 @@ class DementiaSimulator():
     # Spawn drag points for speaker and noise audio
     def CreateDragPoints(self):
         self.SpeakerPoints = self.SpawnDragObjects(
-            self.graphSize, [88, 105], self.SpeakerPointsPos, self.MinPeople, self.MaxPeople)
+            self.graphSize, [88, 100], self.SpeakerPointsPos, self.MinPeople, self.MaxPeople)
         self.NoisePoints = self.SpawnDragObjects(
-            self.graphSize, [88, 430], self.NoisePointsPos, self.CrowdednessMin, self.CrowdednessMax)
+            self.graphSize, [88, 425], self.NoisePointsPos, self.CrowdednessMin, self.CrowdednessMax)
 
     # For debugging, read the pos of the mouse in the screen
     def TrackMousePos(self, event):

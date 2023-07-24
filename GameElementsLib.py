@@ -90,8 +90,10 @@ class DragPoint():
             # If object is being dragged, and mouse is in range
             if self.BeingDragged & (mouse_y > self.ClampRange[0]) & (mouse_y < self.ClampRange[1]):
                 self.Rect.y = mouse_y
-            else:
-                self.BeingDragged = False
+            elif self.BeingDragged & (mouse_y >= self.ClampRange[0]):
+                self.Rect.y = self.ClampRange[1]
+            elif self.BeingDragged & (mouse_y <= self.ClampRange[1]):
+                self.Rect.y = self.ClampRange[0]
 
     # Render this object
     def Render(self, screen):
