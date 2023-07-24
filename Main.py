@@ -19,13 +19,13 @@ from GameElementsLib import DragPoint
 from GameElementsLib import InputBox
 from GameElementsLib import VideoCapture as VC
 from GameElementsLib import Checkbox
+from GameElementsLib import Button
 import cv2 as cv
 
 
 class DementiaSimulator():
 
     def __init__(self):
-        # TODO ADD A CHECK FOR MP3 OR .WAV and CHANGE THE FILE NAME ACCORDINGLY
         self.Running = True
         self.Crowdedness = 0
         self.CrowdednessMin = 0
@@ -347,7 +347,8 @@ class DementiaSimulator():
 
     # Do some stuff on exit
     def OnExit(self):
-        self.SaveData()
+        print("Now closing program")
+        #self.SaveData()
 
     # Main method
     def Main(self):
@@ -362,6 +363,7 @@ class DementiaSimulator():
         self.StartAudio()  # Call on first loop to get %s to defaults
         numberOnScreen = self.NumberOnScreen
         crowdedness = self.Crowdedness
+        save_button = Button(700, 500, 50, 200, "Save Curves")
 
         # Workaround: Forces our first loop to calculate plots
         self.SpeakerPointsPos, self.NoisePointsPos = [], []
@@ -374,7 +376,7 @@ class DementiaSimulator():
             for event in events:
                 # self.TrackMousePos(event)
                 self.CheckQuit(event)
-                # Handle manual input for #people
+                # Handle manual input for num of people
                 numberPeopleText.handle_event(event)
                 if numberPeopleText.returnInput != None:
                     numberOnScreen = int(numberPeopleText.returnInput)
@@ -393,12 +395,17 @@ class DementiaSimulator():
                     dragPoint.handle_event(event)
                     noisePointsPos.append(dragPoint.GetPercentageHeight())
 
-                # Let use activate camera with button
+                # Let user activate camera with button 
                 useCameraToggle.update_checkbox(event)
                 if useCameraToggle.is_checked():
                     self.UseStream = True
                 else:
                     self.UseStream = False
+                
+                # Let user save graphs if they like them
+                save_graph = save_button.handle_event(event)
+                if save_graph:
+                    self.SaveData()
 
             # Get num of ppl and crowdedness from camera stream
             if self.UseStream:
@@ -440,6 +447,7 @@ class DementiaSimulator():
             for dragPoint in self.NoisePoints:
                 dragPoint.Render(self.Screen)
             useCameraToggle.render_checkbox()
+            save_button.Render(self.Screen)
 
             # Update display
             pygame.display.update()
