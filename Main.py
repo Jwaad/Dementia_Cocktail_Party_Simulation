@@ -40,6 +40,7 @@ class DementiaSimulator():
         self.SpeakerVolume = 1
         self.NoisePoints = []
         self.NoiseVolume = 0
+        self.CameraIndex = 1
         self.SpeakerTRF = None
         self.NoiseTRF = None
         self.Stream = None
@@ -52,7 +53,7 @@ class DementiaSimulator():
     # Detect Camera and establish a video stream
     def StartCameraStream(self):
         print("Starting Camera Stream. This might take a while...")
-        self.Stream = VC(0)
+        self.Stream = VC(self.CameraIndex)
         if not self.Stream.cap.isOpened():
             print("Cannot open camera")
             return
@@ -63,7 +64,7 @@ class DementiaSimulator():
         "Get latest frame, and count faces"
         # Get latest frame
         frame = self.Stream.read()
-        frame = cv.pyrDown(frame)  # Downscale for less lag
+        #frame = cv.pyrDown(frame)  # Downscale for less lag
         hairRects = 5
         crowdedness = 0.5
 
