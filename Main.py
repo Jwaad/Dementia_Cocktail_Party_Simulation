@@ -30,9 +30,9 @@ class DementiaSimulator():
         self.Crowdedness = 0
         self.CrowdednessMin = 0
         self.CrowdednessMax = 1
-        self.NumberOnScreen = 1
+        self.NumberOnScreen = 0
         self.MinPeople = 1   # How many people have to be on screen, before we change the audio
-        self.MaxPeople = 16  # Num people on screen, where audio will be most transformed
+        self.MaxPeople = 10  # Num people on screen, where audio will be most transformed
         self.MonitorDPI = self.GetDPI()
         self.SpeakerPointsPos, self.NoisePointsPos = self.LoadData()
         self.FPS = 60
@@ -54,6 +54,8 @@ class DementiaSimulator():
         self.NoiseFileName = "noise5.wav"
         self.SpeechFileName = "speech.wav"
         self.graphSize = [195, 387]
+        self.SpeakerGraphOrigin = [88, 105]
+        self.NoiseGraphOrigin = [88, 430]
 
     # Detect Camera and establish a video stream
     def StartCameraStream(self):
@@ -162,10 +164,10 @@ class DementiaSimulator():
         """
         # Shared variables
         font = pygame.font.Font('freesansbold.ttf', 20)
-        colour = (0, 100, 100)
+        colour = (0, 0, 0)
         lineHeight = self.graphSize[0] # 193 
         graphWidth = self.graphSize[1] # 387
-        x_start = 88
+        x_start = self.SpeakerGraphOrigin[0]
 
         # Step size for Speaker volume
         stepSize = graphWidth / (self.MaxPeople - self.MinPeople)
@@ -177,22 +179,24 @@ class DementiaSimulator():
             x_pos = (self.NumberOnScreen - self.MinPeople) * stepSize
 
         # Speaker
-        y_origin = 105
+        y_origin = self.SpeakerGraphOrigin[1]
         pygame.draw.line(screen, colour, (x_start + x_pos, y_origin),
                          (x_start + x_pos, (y_origin + lineHeight)), 2)
-        # Draw Title
+        # Draw volume
         text = font.render('{}%'.format(
-            self.SpeakerVolume), True, colour)
+            round(self.SpeakerVolume, 1)), True, colour)
         textRect = text.get_rect()
         textRect[0] = x_start + x_pos
         textRect[1] = y_origin - (textRect[3])
         screen.blit(text, textRect)
-        # Draw volume %
+        
+        # Draw title, speaker
+        font = pygame.font.Font('freesansbold.ttf', 35)
         text = font.render('{}%'.format(
-            self.SpeakerVolume), True, colour)
+            "Speech Volume"), True, colour)
         textRect = text.get_rect()
-        textRect[0] = x_start + x_pos
-        textRect[1] = y_origin - (textRect[3])
+        textRect[0] = x_start + (self.graphSize[1] / 2) - (textRect[2]/2)
+        textRect[1] = y_origin - (textRect[3]) - 45
         screen.blit(text, textRect)
 
         # Step sizes and clamp noise to graph
@@ -204,22 +208,33 @@ class DementiaSimulator():
             x_pos = (self.Crowdedness * graphWidth)
 
         # Noise
-        y_origin = 430
+        font = pygame.font.Font('freesansbold.ttf', 20)
+        y_origin = self.NoiseGraphOrigin[1]
         pygame.draw.line(screen, colour, (x_start + x_pos, y_origin),
                          (x_start + x_pos, (y_origin + lineHeight)), 2)
         text = font.render('{}%'.format(
-            self.NoiseVolume), True, colour)
+            round(self.NoiseVolume,1)), True, colour)
         textRect = text.get_rect()
         textRect[0] = x_start + x_pos
         textRect[1] = y_origin - (textRect[3])
         screen.blit(text, textRect)
+        
+        # Draw title noise
+        font = pygame.font.Font('freesansbold.ttf', 35)
+        text = font.render('{}%'.format(
+            "Noise Volume"), True, (0,0,0))
+        textRect = text.get_rect()
+        textRect[0] = x_start + (self.graphSize[1] / 2) - (textRect[2]/2)
+        textRect[1] = y_origin - (textRect[3]) - 45
+        screen.blit(text, textRect)
+        
 
     # Spawn drag points for speaker and noise audio
     def CreateDragPoints(self):
         self.SpeakerPoints = self.SpawnDragObjects(
-            self.graphSize, [88, 100], self.SpeakerPointsPos, self.MinPeople, self.MaxPeople)
+            self.graphSize, self.SpeakerGraphOrigin, self.SpeakerPointsPos, self.MinPeople, self.MaxPeople)
         self.NoisePoints = self.SpawnDragObjects(
-            self.graphSize, [88, 425], self.NoisePointsPos, self.CrowdednessMin, self.CrowdednessMax)
+            self.graphSize, self.NoiseGraphOrigin, self.NoisePointsPos, self.CrowdednessMin, self.CrowdednessMax)
 
     # For debugging, read the pos of the mouse in the screen
     def TrackMousePos(self, event):
@@ -310,7 +325,7 @@ class DementiaSimulator():
             newNum = self.MinPeople
         elif newNum >= self.MaxPeople:
             newNum = self.MaxPeople
-        self.SpeakerVolume = self.SpeakerTRF(newNum)
+        self.SpeakerVolume = float(self.SpeakerTRF(newNum))
         self.NumberOnScreen = newNum
         self.channel1.set_volume(self.SpeakerVolume/100)
         # update audio
@@ -320,7 +335,7 @@ class DementiaSimulator():
             newCrowdedness = self.CrowdednessMin
         elif newCrowdedness > self.CrowdednessMax:
             newCrowdedness = self.CrowdednessMax
-        self.NoiseVolume = self.NoiseTRF(newCrowdedness)
+        self.NoiseVolume = float(self.NoiseTRF(newCrowdedness))
         self.Crowdedness = newCrowdedness
         self.channel2.set_volume(self.NoiseVolume/100)
 
@@ -377,7 +392,7 @@ class DementiaSimulator():
                 # Handle manual input for num of people
                 numberPeopleText.handle_event(event)
                 if numberPeopleText.returnInput != None:
-                    numberOnScreen = int(numberPeopleText.returnInput)
+                    numberOnScreen = int(float(numberPeopleText.returnInput)) #float -> Int, to handle decimals
                 # Handle manual input for crowdedness
                 crowdednessText.handle_event(event)
                 if crowdednessText.returnInput != None:
