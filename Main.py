@@ -3,6 +3,11 @@
 Created on Mon Jul 10 18:10:49 2023
 
 @author: Jwaad
+
+Program to simulate what its like to be in group setting for some dementia sufferers.
+Program alters 2 seperate audio tracks based on the position of the crowd
+Noise volume changes with how close the crowd is to the speaker (on average)
+Speech volume changes based on the amount of people in the room.
 """
 
 import sys
