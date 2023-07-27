@@ -8,6 +8,11 @@ Program to simulate what its like to be in group setting for some dementia suffe
 Program alters 2 seperate audio tracks based on the position of the crowd
 Noise volume changes with how close the crowd is to the speaker (on average)
 Speech volume changes based on the amount of people in the room.
+
+To Do:
+Fix padding on plots
+Multi thread computer vision code to make it less laggy
+Computer Vision code to recognise people.
 """
 
 import sys
@@ -278,7 +283,7 @@ class DementiaSimulator():
             if x in setpoint_x:
                 setpoint_index = setpoint_x.index(x)
                 interp_y_data.append(np.array(set_points[setpoint_index][1]))
-                print("using setpoint instead of interpolation")
+                #print("using setpoint instead of interpolation")
             else:
                 interp_y_data.append(trf(x))
 
@@ -294,7 +299,6 @@ class DementiaSimulator():
         x_inches = plot_size[0] / self.MonitorDPI
         y_inches = plot_size[1] / self.MonitorDPI
         fig = pylab.figure(figsize=[x_inches, y_inches], dpi=self.MonitorDPI)
-        fig.tight_layout()
         ax = fig.gca()
         ax.margins(x=0, y=0)
         ax.spines[['right', 'top']].set_visible(False)
@@ -305,6 +309,7 @@ class DementiaSimulator():
         ax.set_xticks(np.arange(min, max + x_step, x_step))
         ax.set_yticks(np.arange(0, 110, 10))
         ax.grid()
+        fig.tight_layout()
 
         # Plot interpolated data
         ax.plot(x_data, interp_y_data, linewidth=3.0)
