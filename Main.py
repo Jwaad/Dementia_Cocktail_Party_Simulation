@@ -132,6 +132,7 @@ class DementiaSimulator():
         self.Screen.fill(self.BackgroundColour)
         pygame.display.update()
 
+    # Initialise setpoints / drag points
     def SpawnDragObjects(self, graphSize, origin_xy, dragPoints, min, max):
         # Spawn drag points for speaker curve
         origin_x = origin_xy[0]
@@ -155,7 +156,7 @@ class DementiaSimulator():
             i += 1
         return SpawnedPoints
 
-    # Draw faint vertical line, showing current volume %
+    # Draw thin vertical line, showing current volume %
     def DrawGraphStats(self, screen):
         """Draws a line on graph and writes the current volume % above the line
 
@@ -247,16 +248,16 @@ class DementiaSimulator():
         setpoints refers to the output of the dragable squares used for curve fitting.
         These must be in the format: [[x1,y1],[x2,y2],etc]
         """
-
+        
         # Fit curve to setpoints, and take as Ydata
-        x_data = []
-        y_data = []
+        setpoint_x = []
+        setpoint_y = []
         for data_pos in set_points:
-            x_data.append(data_pos[0])
-            y_data.append(data_pos[1])
+            setpoint_x.append(data_pos[0])
+            setpoint_y.append(data_pos[1])
 
         # Interpolate
-        trf = interp1d(x_data, y_data, 'cubic')
+        trf = interp1d(setpoint_x, setpoint_y, 'cubic')
 
         # Create new plot using our TRF, in our min and max range
         interp_y_data = []
@@ -265,8 +266,16 @@ class DementiaSimulator():
             step_size = 0.01
         x_data = np.round(np.arange(min, max +
                                     step_size, step_size), 3)
+        
+        # Create interpolated data to smoothen the curve
         for x in x_data:
-            interp_y_data.append(trf(x))
+            # If x == setpoint x, then just use setpoint Y
+            if x in setpoint_x:
+                setpoint_index = setpoint_x.index(x)
+                interp_y_data.append(np.array(set_points[setpoint_index][1]))
+                print("using setpoint instead of interpolation")
+            else:
+                interp_y_data.append(trf(x))
 
         # Clear old plots:
         if self.OpenFigures != []:
@@ -436,12 +445,14 @@ class DementiaSimulator():
                 newSetPoints = []
                 for object in self.SpeakerPoints:
                     newSetPoints.append(object.GetGraphPos())
+                print("Creating speech curve")
                 speaker_volume_curve, self.SpeakerTRF = self.CreateCurve(
                     newSetPoints, self.MinPeople, self.MaxPeople, plot_size=[500, 250])
                 self.SpeakerPointsPos = speakerPointsPos
             # Draw curve for noise, if setpoints change
             if self.NoisePointsPos != noisePointsPos:
                 newSetPoints = []
+                print("Creating noise curve")
                 for object in self.NoisePoints:
                     newSetPoints.append(object.GetGraphPos())
                 noise_volume_curve, self.NoiseTRF = self.CreateCurve(

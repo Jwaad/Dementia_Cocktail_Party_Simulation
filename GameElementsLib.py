@@ -52,7 +52,7 @@ class Button:
 
 class DragPoint():
 
-    def __init__(self, x_position, y_percentage, clampRange, xGraphPos):
+    def __init__(self, x_position, y_percentage, clampRange, xGraphPos, size= [10,10]):
         """Creates a dragable. 10x10 red square, 
         that returns it's position in regards to 
         the graph it's sort of attached to.
@@ -64,12 +64,12 @@ class DragPoint():
             xGraphPos (Float / Int): The X position in regards to the graph. not it's position on screen
         """
         self.ID = time.time
-        size = (10, 10)  # 10 pix by 10
         self.ClampRange = clampRange
+        self.Size = size
         self.x = xGraphPos  # It's X value in respect to the curve
         y_position = self.ConvertPercentToPosition(y_percentage)
         self.Rect = pygame.rect.Rect(
-            (x_position - (size[0]/2)), (y_position - (size[1]/2)), size[0], size[1])
+            (x_position - (self.Size[0]/2)), (y_position - (self.Size[1]/2)), self.Size[0], self.Size[1])
         self.BeingDragged = False
 
     # Move the pos of this rect, depending on drag + clamp ranges
@@ -102,7 +102,7 @@ class DragPoint():
     # Return the % of this objects position, between its min and max clamp. E.G. 50 / 100 = 0.5
     def GetPercentageHeight(self):
         clamp_length = self.ClampRange[1] - self.ClampRange[0]
-        percentHeight = (1 - ((self.Rect.y - self.ClampRange[0]) / clamp_length) ) * 100 # this percentage is flipped cause pygame y0 = top left
+        percentHeight = (1 - ((self.Rect.centery - self.ClampRange[0]) / clamp_length) ) * 100 # this percentage is flipped cause pygame y0 = top left
         if percentHeight > 100:
             percentHeight = 100
         elif percentHeight < 0 :
@@ -115,7 +115,7 @@ class DragPoint():
         elif percentage < 0 :
             percentage = 0
         clamp_length = self.ClampRange[1] - self.ClampRange[0]
-        y_pos = (self.ClampRange[0] + ( (1 - (percentage / 100)) * clamp_length))
+        y_pos = (self.ClampRange[0] + ( (1 - (percentage / 100)) * clamp_length))# + (self.Size[1] / 2)
         return y_pos
     
     # Return X and Y coordinates in respect to it's graph placement
