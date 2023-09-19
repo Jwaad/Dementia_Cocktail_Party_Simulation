@@ -5,7 +5,7 @@ Created on Mon Jul 10 18:10:49 2023
 @author: Jwaad
 
 Program to simulate what its like to be in group setting for some dementia sufferers.
-Program alters 2 seperate audio tracks based on the position of the crowd
+Program mixes volumes of 2 seperate audio tracks based on the position of the crowd
 Noise volume changes with how close the crowd is to the speaker (on average)
 Speech volume changes based on the amount of people in the room.
 """
@@ -13,19 +13,21 @@ Speech volume changes based on the amount of people in the room.
 import sys
 import pickle
 import pygame
+import time
 from pygame.locals import *
 import matplotlib
 import matplotlib.backends.backend_agg as agg
 import pylab
 from scipy.interpolate import interp1d
 import numpy as np
+import cv2 as cv
 from PyQt5.QtWidgets import QApplication
 from GameElementsLib import DragPoint
 from GameElementsLib import InputBox
 from GameElementsLib import VideoCapture as VC
 from GameElementsLib import Checkbox
 from GameElementsLib import Button
-import cv2 as cv
+
 
 
 class DementiaSimulator():
@@ -35,6 +37,8 @@ class DementiaSimulator():
         self.Crowdedness = 0
         self.CrowdednessMin = 0
         self.CrowdednessMax = 1
+        self.WidthFurthest = 20 # width of bounding box in pixels, when we consider person at max distance away
+        self.WidthClosest = 100 # width of bounding box in pixels, when we consider person at max distance away
         self.NumberOnScreen = 0
         self.MinPeople = 1   # How many people have to be on screen, before we change the audio
         self.MaxPeople = 10  # Num people on screen, where audio will be most transformed
@@ -46,18 +50,21 @@ class DementiaSimulator():
         self.SpeakerVolume = 1
         self.NoisePoints = []
         self.NoiseVolume = 0
-        self.CameraIndex = 1
+        self.CameraIndex = 0 #1
         self.SpeakerTRF = None
         self.NoiseTRF = None
         self.Stream = None
+        self.HOG = cv.HOGDescriptor() # Pedestrian detection
+        self.HOG.setSVMDetector(cv.HOGDescriptor_getDefaultPeopleDetector())
         self.ShowCamera = True
+        self.CameraDown = False
         self.UseStream = False
         self.Detector = None
         self.OpenFigures = []
         self.BackgroundImage = None
         self.AudioPath = "audio/"
-        self.NoiseFileName = "noise5.wav"
-        self.SpeechFileName = "speech.wav"
+        self.NoiseFileName = "noise.mp3"
+        self.SpeechFileName = "speech.mp3"
         self.graphSize = [195, 387]
         self.SpeakerGraphOrigin = [88, 105]
         self.NoiseGraphOrigin = [88, 430]
@@ -68,27 +75,58 @@ class DementiaSimulator():
         self.Stream = VC(self.CameraIndex)
         if not self.Stream.cap.isOpened():
             print("Cannot open camera")
+            self.CameraDown = True
             return
         self.BackgroundImage = self.Stream.read()
 
     # Process frame
-    def ProcessFrame(self):
+    def ProcessFrame(self, downscale_num = 0):
         "Get latest frame, and count faces"
+        if self.CameraDown:
+            print("Camera was not detected. Please restart the application")
+            return 0, 0
         # Get latest frame
         frame = self.Stream.read()
-        #frame = cv.pyrDown(frame)  # Downscale for less lag
-        hairRects = 5
-        crowdedness = 0.5
-
+        
+        # downscale as many times as specified
+        for i in range (0, downscale_num):
+            print("image was downscaled")
+            frame = cv.pyrDown(frame)  # Downscale for less lag
+        crowdedness = 0.0
+        
+        # Detect people
+        (person_boxes, _) = self.HOG.detectMultiScale(frame, winStride=(4, 4), padding=(0, 0), scale=1)
+        people_count = len(person_boxes)
+        
+        # Compute crowdedness
+        if people_count <= 1:
+            crowdedness = 0
+        else:
+            people_distance = []
+            for box in person_boxes:
+                x, y, w, h = box
+                if w < self.WidthFurthest:
+                    people_distance.append(0)
+                elif w > self.WidthClosest:
+                    people_distance.append(1)
+                else:
+                    # percentage closeness within min and max. 0.5 = 50% of the distance from min - max
+                    closeness = (w - self.WidthFurthest) / (self.WidthClosest - self.WidthFurthest)
+                    people_distance.append(closeness)
+            crowdedness = np.mean(people_distance)
+        
         if self.ShowCamera:
-            #for rect in hairRects:
-            #    x, y, w, h = face['box']
-            #    cv.rectangle(frame, (x, y), ((x+w), (y+h)), (255, 0, 0), 3)
+            # Draw bounding boxs
+            for (x, y, w, h) in person_boxes:
+                cv.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
+            
+            # Show img
             cv.imshow('Camera Feed', frame)
-            if cv.waitKey(1) == ord('q'):
+            # if click q or on the X, then close stream. (keep processing though)
+            if cv.waitKey(1) == ord('q'):# or cv.getWindowProperty('Camera Feed', 0) == -1:
                 self.ShowCamera = False
 
-        return hairRects, crowdedness
+        return people_count, crowdedness
 
     # Use pickle to load our previously saved drag points
     def BackupLoadData(self):
@@ -244,7 +282,7 @@ class DementiaSimulator():
 
     # For debugging, read the pos of the mouse in the screen
     def TrackMousePos(self, event):
-        if event.type == MOUSEMOTION:
+        if event.type == pygame.MOUSEBUTTONDOWN():
             print(event.pos)
 
     # Create a plot in matlab, and convert it into an image
@@ -278,7 +316,7 @@ class DementiaSimulator():
             if x in setpoint_x:
                 setpoint_index = setpoint_x.index(x)
                 interp_y_data.append(np.array(set_points[setpoint_index][1]))
-                print("using setpoint instead of interpolation")
+                #print("using setpoint instead of interpolation")
             else:
                 interp_y_data.append(trf(x))
 
@@ -376,7 +414,6 @@ class DementiaSimulator():
     # Do some stuff on exit
     def OnExit(self):
         print("Now closing program")
-        #self.SaveData()
 
     # Main method
     def Main(self):
@@ -398,11 +435,13 @@ class DementiaSimulator():
 
         # Main loop
         while self.Running:
+            t0 = time.time() # fps tracking
             # Handle Events
             events = pygame.event.get()
             for event in events:
                 # self.TrackMousePos(event)
                 self.CheckQuit(event)
+                
                 # Handle manual input for num of people
                 numberPeopleText.handle_event(event)
                 if numberPeopleText.returnInput != None:
@@ -426,6 +465,7 @@ class DementiaSimulator():
                 useCameraToggle.update_checkbox(event)
                 if useCameraToggle.is_checked():
                     self.UseStream = True
+                    self.ShowCamera = True 
                 else:
                     self.UseStream = False
                 
@@ -436,7 +476,7 @@ class DementiaSimulator():
 
             # Get num of ppl and crowdedness from camera stream
             if self.UseStream:
-                numberOnScreen, crowdedness = self.ProcessFrame()
+                numberOnScreen, crowdedness = self.ProcessFrame(downscale_num=1)
 
             # If number on screen changed, change volume of speech
             if self.NumberOnScreen != numberOnScreen:
