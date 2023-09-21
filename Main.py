@@ -26,13 +26,13 @@ import pylab
 from scipy.interpolate import interp1d
 import numpy as np
 import cv2 as cv
+from mtcnn.mtcnn import MTCNN
 from PyQt5.QtWidgets import QApplication
 from GameElementsLib import DragPoint
 from GameElementsLib import InputBox
 from GameElementsLib import VideoCapture as VC
 from GameElementsLib import Checkbox
 from GameElementsLib import Button
-
 
 
 class DementiaSimulator():
@@ -42,8 +42,8 @@ class DementiaSimulator():
         self.Crowdedness = 0
         self.CrowdednessMin = 0
         self.CrowdednessMax = 1
-        self.WidthFurthest = 20 # width of bounding box in pixels, when we consider person at max distance away
-        self.WidthClosest = 100 # width of bounding box in pixels, when we consider person at max distance away
+        self.WidthFurthest = 10 # width of bounding box in pixels, when we consider person at max distance away
+        self.WidthClosest = 35 # width of bounding box in pixels, when we consider person at max distance away
         self.NumberOnScreen = 0
         self.MinPeople = 1   # How many people have to be on screen, before we change the audio
         self.MaxPeople = 10  # Num people on screen, where audio will be most transformed
@@ -55,12 +55,18 @@ class DementiaSimulator():
         self.SpeakerVolume = 1
         self.NoisePoints = []
         self.NoiseVolume = 0
-        self.CameraIndex = 0 #1
+        self.CameraIndex = 1 #1
         self.SpeakerTRF = None
         self.NoiseTRF = None
         self.Stream = None
-        self.HOG = cv.HOGDescriptor() # Pedestrian detection
-        self.HOG.setSVMDetector(cv.HOGDescriptor_getDefaultPeopleDetector())
+        self.FaceTrack = True
+        if self.FaceTrack:
+            print("Using Face Tracker")
+            self.FaceDetector = MTCNN()
+        else:
+            print("Using pedestrian tracker (HOG)")
+            self.HOG = cv.HOGDescriptor() # Pedestrian detection
+            self.HOG.setSVMDetector(cv.HOGDescriptor_getDefaultPeopleDetector())
         self.ShowCamera = True
         self.CameraDown = False
         self.UseStream = False
@@ -73,6 +79,7 @@ class DementiaSimulator():
         self.graphSize = [195, 387]
         self.SpeakerGraphOrigin = [88, 105]
         self.NoiseGraphOrigin = [88, 430]
+        self.down_scale_num = 2
 
     # Detect Camera and establish a video stream
     def StartCameraStream(self):
@@ -95,13 +102,21 @@ class DementiaSimulator():
         
         # downscale as many times as specified
         for i in range (0, downscale_num):
-            print("image was downscaled")
+            #print("image was downscaled")
             frame = cv.pyrDown(frame)  # Downscale for less lag
         crowdedness = 0.0
         
         # Detect people
-        (person_boxes, _) = self.HOG.detectMultiScale(frame, winStride=(4, 4), padding=(0, 0), scale=1)
+        if self.FaceTrack:
+            results = self.FaceDetector.detect_faces(frame)
+            person_boxes = []
+            for person in results:
+                person_boxes.append(person["box"])
+        else:
+            (person_boxes, _) = self.HOG.detectMultiScale(frame, winStride=(8, 8), padding=(4, 4), scale=1.05)
         people_count = len(person_boxes)
+        
+        print(person_boxes)
         
         # Compute crowdedness
         if people_count <= 1:
@@ -481,7 +496,7 @@ class DementiaSimulator():
 
             # Get num of ppl and crowdedness from camera stream
             if self.UseStream:
-                numberOnScreen, crowdedness = self.ProcessFrame(downscale_num=1)
+                numberOnScreen, crowdedness = self.ProcessFrame(downscale_num = self.down_scale_num)
 
             # If number on screen changed, change volume of speech
             if self.NumberOnScreen != numberOnScreen:
