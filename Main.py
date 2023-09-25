@@ -91,7 +91,7 @@ class DementiaSimulator():
             self.CameraDown = True
             return
         self.BackgroundImage = self.Stream.read()
-        backSub = cv.createBackgroundSubtractorKNN()
+        self.BackSub = cv.createBackgroundSubtractorKNN()
         
         
     def preprocess(self, frame, downscale_num = 0 ):
@@ -104,6 +104,9 @@ class DementiaSimulator():
         for i in range (0, downscale_num):
             #print("image was downscaled")
             frame = cv.pyrDown(frame)  # Downscale for less lag
+        
+        # Flip to work as mirror
+        frame = cv.flip(frame, 1)
         
         return frame
 
@@ -143,6 +146,11 @@ class DementiaSimulator():
         return crowdedness
     
     
+    def remove_background(self, frame):
+        """ Remove the background image from the current frame"""
+        forground_mask = self.BackSub.apply(frame)
+        
+    
     # Process frame
     def ProcessFrame(self, downscale_num = 0):
         "Get latest frame, and count faces"
@@ -157,6 +165,7 @@ class DementiaSimulator():
         frame = self.preprocess(original_image, downscale_num = downscale_num)
         
         # Remove background image
+        #frame = self.remove_background(frame)        
         
         # Detect people
         crowdedness = 0.0
@@ -170,13 +179,17 @@ class DementiaSimulator():
         if self.ShowCamera:
             # Draw bounding boxes
             for (x, y, w, h) in person_boxes:
-                original_image
-                cv.rectangle(original_image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                dn = downscale_num if downscale_num < 1 else 1
                 cv.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
-            
+                # Scale up bounding box for original image
+                x, y, w, h = [x * dn, y * dn, w * dn, h * dn]
+                cv.rectangle(original_image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                cv.putText(original_image, "w = {}, h = {}".format(w, h), (x + 15, y - 15),
+                           cv.FONT_HERSHEY_SIMPLEX, 0.5 , (0,0,0))
+                
             # Show img
-            cv.imshow('Camera Feed', frame)
-            cv.imshow('Camera Feed', original_image)
+            cv.imshow('Processed Stream', frame)
+            cv.imshow('Original Image', original_image)
             # if click q or on the X, then close stream. (keep processing though)
             if cv.waitKey(1) == ord('q'):# or cv.getWindowProperty('Camera Feed', 0) == -1:
                 self.ShowCamera = False
@@ -468,6 +481,11 @@ class DementiaSimulator():
 
     # Do some stuff on exit
     def OnExit(self):
+        # Release the video capture object
+        self.Stream.cap.release()
+
+        # Close all OpenCV windows
+        cv.destroyAllWindows()
         print("Now closing program")
 
     # Main method
