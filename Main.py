@@ -81,6 +81,7 @@ class DementiaSimulator():
         self.NoiseGraphOrigin = [88, 430]
         self.down_scale_num = 2
 
+
     # Detect Camera and establish a video stream
     def StartCameraStream(self):
         print("Starting Camera Stream. This might take a while...")
@@ -90,36 +91,41 @@ class DementiaSimulator():
             self.CameraDown = True
             return
         self.BackgroundImage = self.Stream.read()
-
-    # Process frame
-    def ProcessFrame(self, downscale_num = 0):
-        "Get latest frame, and count faces"
-        if self.CameraDown:
-            print("Camera was not detected. Please restart the application")
-            return 0, 0
-        # Get latest frame
-        frame = self.Stream.read()
+        backSub = cv.createBackgroundSubtractorKNN()
+        
+        
+    def preprocess(self, frame, downscale_num = 0 ):
+        """ Take frame and pre process according to our needs"""
+        
+         # Convert to grey scale to save processing
+        frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
         
         # downscale as many times as specified
         for i in range (0, downscale_num):
             #print("image was downscaled")
             frame = cv.pyrDown(frame)  # Downscale for less lag
-        crowdedness = 0.0
         
-        # Detect people
-        if self.FaceTrack:
+        return frame
+
+
+    def count_people(self, frame, face_track = True):
+        """ Use selected technique (face track or HOG) to track how many people are on screen and return bounding boxes"""
+        person_boxes = []
+        if face_track:
             results = self.FaceDetector.detect_faces(frame)
-            person_boxes = []
             for person in results:
                 person_boxes.append(person["box"])
         else:
             (person_boxes, _) = self.HOG.detectMultiScale(frame, winStride=(8, 8), padding=(4, 4), scale=1.05)
-        people_count = len(person_boxes)
-        
-        print(person_boxes)
-        
+        return person_boxes
+    
+    
+    def compute_crowdedness(self, person_boxes):
+        """ Take in bounding boxes and do take avg distance
+        distance is given as a percentage of their distance between the min and max values inputted
+        """
         # Compute crowdedness
-        if people_count <= 1:
+        if len(person_boxes) <= 1:
             crowdedness = 0
         else:
             people_distance = []
@@ -134,14 +140,43 @@ class DementiaSimulator():
                     closeness = (w - self.WidthFurthest) / (self.WidthClosest - self.WidthFurthest)
                     people_distance.append(closeness)
             crowdedness = np.mean(people_distance)
+        return crowdedness
+    
+    
+    # Process frame
+    def ProcessFrame(self, downscale_num = 0):
+        "Get latest frame, and count faces"
+        if self.CameraDown:
+            print("Camera was not detected. Please restart the application")
+            return 0, 0
         
+        # Get latest frame
+        original_image = self.Stream.read()
+        
+        # Preprocess frame
+        frame = self.preprocess(original_image, downscale_num = downscale_num)
+        
+        # Remove background image
+        
+        # Detect people
+        crowdedness = 0.0
+        person_boxes = self.count_people(frame, self.FaceTrack)
+        people_count = len(person_boxes)
+        
+        # Get average distance / closeness to target
+        crowdedness = self.compute_crowdedness(person_boxes)
+    
+        # Display stream to user
         if self.ShowCamera:
-            # Draw bounding boxs
+            # Draw bounding boxes
             for (x, y, w, h) in person_boxes:
+                original_image
+                cv.rectangle(original_image, (x, y), (x + w, y + h), (0, 0, 255), 2)
                 cv.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
             
             # Show img
             cv.imshow('Camera Feed', frame)
+            cv.imshow('Camera Feed', original_image)
             # if click q or on the X, then close stream. (keep processing though)
             if cv.waitKey(1) == ord('q'):# or cv.getWindowProperty('Camera Feed', 0) == -1:
                 self.ShowCamera = False
