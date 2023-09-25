@@ -26,15 +26,13 @@ import pylab
 from scipy.interpolate import interp1d
 import numpy as np
 import cv2 as cv
-from mtcnn.mtcnn import MTCNN
 from PyQt5.QtWidgets import QApplication
 from GameElementsLib import DragPoint
 from GameElementsLib import InputBox
 from GameElementsLib import VideoCapture as VC
-from GameElementsLib import Checkbox
 from GameElementsLib import Button
-
-
+from person_tracker import PersonTracker
+    
 class DementiaSimulator():
 
     def __init__(self):
@@ -49,24 +47,16 @@ class DementiaSimulator():
         self.MaxPeople = 10  # Num people on screen, where audio will be most transformed
         self.MonitorDPI = self.GetDPI()
         self.SpeakerPointsPos, self.NoisePointsPos = self.LoadData()
-        self.FPS = 60
+        self.FPS = 30
         self.Clock = pygame.time.Clock()
         self.SpeakerPoints = []
         self.SpeakerVolume = 1
         self.NoisePoints = []
         self.NoiseVolume = 0
-        self.CameraIndex = 1 #1
+        self.CameraIndex = 0 #1
         self.SpeakerTRF = None
         self.NoiseTRF = None
         self.Stream = None
-        self.FaceTrack = True
-        if self.FaceTrack:
-            print("Using Face Tracker")
-            self.FaceDetector = MTCNN()
-        else:
-            print("Using pedestrian tracker (HOG)")
-            self.HOG = cv.HOGDescriptor() # Pedestrian detection
-            self.HOG.setSVMDetector(cv.HOGDescriptor_getDefaultPeopleDetector())
         self.ShowCamera = True
         self.CameraDown = False
         self.UseStream = False
@@ -80,6 +70,7 @@ class DementiaSimulator():
         self.SpeakerGraphOrigin = [88, 105]
         self.NoiseGraphOrigin = [88, 430]
         self.down_scale_num = 2
+        
 
 
     # Detect Camera and establish a video stream
@@ -90,14 +81,13 @@ class DementiaSimulator():
             print("Cannot open camera")
             self.CameraDown = True
             return
-        self.BackgroundImage = self.Stream.read()
-        self.BackSub = cv.createBackgroundSubtractorKNN()
+        self.PT = PersonTracker(self.Stream, self.WidthFurthest, self.WidthClosest)
         
         
     def preprocess(self, frame, downscale_num = 0 ):
         """ Take frame and pre process according to our needs"""
         
-         # Convert to grey scale to save processing
+        # Convert to grey scale to save processing
         frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
         
         # downscale as many times as specified
@@ -116,6 +106,7 @@ class DementiaSimulator():
         person_boxes = []
         if face_track:
             results = self.FaceDetector.detect_faces(frame)
+            #results = self.FaceDetector.detectMultiScale(frame, 1.1, 3)
             for person in results:
                 person_boxes.append(person["box"])
         else:
@@ -149,6 +140,8 @@ class DementiaSimulator():
     def remove_background(self, frame):
         """ Remove the background image from the current frame"""
         forground_mask = self.BackSub.apply(frame)
+        frame = cv.bitwise_and(frame, frame, mask= forground_mask)
+        return frame
         
     
     # Process frame
@@ -165,11 +158,11 @@ class DementiaSimulator():
         frame = self.preprocess(original_image, downscale_num = downscale_num)
         
         # Remove background image
-        #frame = self.remove_background(frame)        
+        frame = self.remove_background(frame)        
         
         # Detect people
         crowdedness = 0.0
-        person_boxes = self.count_people(frame, self.FaceTrack)
+        person_boxes = [[0,0,50,50]]#self.count_people(frame, self.FaceTrack)
         people_count = len(person_boxes)
         
         # Get average distance / closeness to target
@@ -180,7 +173,7 @@ class DementiaSimulator():
             # Draw bounding boxes
             for (x, y, w, h) in person_boxes:
                 dn = downscale_num if downscale_num < 1 else 1
-                cv.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                cv.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 1)
                 # Scale up bounding box for original image
                 x, y, w, h = [x * dn, y * dn, w * dn, h * dn]
                 cv.rectangle(original_image, (x, y), (x + w, y + h), (0, 0, 255), 2)
@@ -497,11 +490,11 @@ class DementiaSimulator():
         self.CreateDragPoints()
         numberPeopleText = InputBox(575, 100, 50, 32)
         crowdednessText = InputBox(575, 400, 50, 32)
-        useCameraToggle = Checkbox(self.Screen, 700, 100)
         self.StartAudio()  # Call on first loop to get %s to defaults
         numberOnScreen = self.NumberOnScreen
         crowdedness = self.Crowdedness
         save_button = Button(700, 500, 50, 200, "Save Curves")
+        toggle_camera_button = Button(650, 50, 100, 300, "TOGGLE CAMERA")
 
         # Workaround: Forces our first loop to calculate plots
         self.SpeakerPointsPos, self.NoisePointsPos = [], []
@@ -533,23 +526,23 @@ class DementiaSimulator():
                 for dragPoint in self.NoisePoints:
                     dragPoint.handle_event(event)
                     noisePointsPos.append(dragPoint.GetPercentageHeight())
-
-                # Let user activate camera with button 
-                useCameraToggle.update_checkbox(event)
-                if useCameraToggle.is_checked():
-                    self.UseStream = True
-                    self.ShowCamera = True 
-                else:
-                    self.UseStream = False
                 
                 # Let user save graphs if they like them
                 save_graph = save_button.handle_event(event)
                 if save_graph:
                     self.SaveData()
+                
+                # Start and stop camera processing
+                camera_pressed = toggle_camera_button.handle_event(event)
+                if camera_pressed:
+                    self.UseStream = not self.UseStream
+                    if self.UseStream:
+                        self.PT.ShowCamera = True 
 
             # Get num of ppl and crowdedness from camera stream
             if self.UseStream:
-                numberOnScreen, crowdedness = self.ProcessFrame(downscale_num = self.down_scale_num)
+                #numberOnScreen, crowdedness = self.ProcessFrame(downscale_num = self.down_scale_num)
+                numberOnScreen, crowdedness = self.PT.ProcessFrame(downscale_num = self.down_scale_num)
 
             # If number on screen changed, change volume of speech
             if self.NumberOnScreen != numberOnScreen:
@@ -588,9 +581,15 @@ class DementiaSimulator():
                 dragPoint.Render(self.Screen)
             for dragPoint in self.NoisePoints:
                 dragPoint.Render(self.Screen)
-            useCameraToggle.render_checkbox()
             save_button.Render(self.Screen)
-
+            toggle_camera_button.Render(self.Screen)
+            # While camera is active, draw red border around button
+            if self.UseStream:
+                button_rect = toggle_camera_button.rect
+                lw = 3
+                x, y, w, h = button_rect
+                pygame.draw.rect(self.Screen, (255,0,0), [x - lw, y - lw, w + (lw * 2), h + (lw * 2)], lw)
+            
             # Update display
             pygame.display.update()
 
