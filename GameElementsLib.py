@@ -128,7 +128,7 @@ class DragPoint():
 class InputBox:
 
     def __init__(self, x, y, w, h, text=''):
-        """THIS CLASS WAS FOUND ONLINE,(I EDITED IT QUITE A BIT)
+        """THIS CLASS WAS FOUND ONLINE, (I EDITED IT QUITE A BIT)
         SOURCE: https://stackoverflow.com/questions/46390231/how-can-i-create-a-text-input-box-with-pygame
 
         """
@@ -193,7 +193,7 @@ class VideoCapture:
     """
 
     def __init__(self, name):
-        self.cap = cv2.VideoCapture(name)
+        self.cap = cv2.VideoCapture(name, cv2.CAP_DSHOW)
         self.lock = threading.Lock()
         self.t = threading.Thread(target=self._reader)
         self.t.daemon = True

@@ -31,8 +31,8 @@ from GameElementsLib import DragPoint
 from GameElementsLib import InputBox
 from GameElementsLib import VideoCapture as VC
 from GameElementsLib import Button
-from person_tracker import PersonTracker
-import cProfile
+#from mtcnn.mtcnn import MTCNN
+#import cProfile
 
 class DementiaSimulator():
 
@@ -77,13 +77,13 @@ class DementiaSimulator():
     def StartCameraStream(self):
         print("Starting Camera Stream. This might take a while...")
         self.Stream = VC(self.CameraIndex)
-        self.PT = PersonTracker(self.Stream, self.WidthFurthest, self.WidthClosest)
         if not self.Stream.cap.isOpened():
             print("Cannot open camera, shutting down")
             self.r
             self.CameraDown = True
             return
-        
+        self.BackgroundImage = self.Stream.read()
+        self.BackgroundImage= self.preprocess(self.BackgroundImage, downscale_num = self.down_scale_num)
         
     def preprocess(self, frame, downscale_num = 0 ):
         """ Take frame and pre process according to our needs"""
@@ -95,23 +95,30 @@ class DementiaSimulator():
         for i in range (0, downscale_num):
             #print("image was downscaled")
             frame = cv.pyrDown(frame)  # Downscale for less lag
-        
-        # Flip to work as mirror
-        frame = cv.flip(frame, 1)
-        
+
         return frame
 
 
-    def count_people(self, frame, face_track = True):
+    def count_people(self, frame):
         """ Use selected technique (face track or HOG) to track how many people are on screen and return bounding boxes"""
         person_boxes = []
-        if face_track:
-            results = self.FaceDetector.detect_faces(frame)
-            #results = self.FaceDetector.detectMultiScale(frame, 1.1, 3)
-            for person in results:
-                person_boxes.append(person["box"])
-        else:
-            (person_boxes, _) = self.HOG.detectMultiScale(frame, winStride=(8, 8), padding=(4, 4), scale=1.05)
+        
+        #self.PersonDetector = MTCNN()
+        self.PersonDetector = cv.CascadeClassifier(cv.data.haarcascades + "haarcascade_frontalface_default.xml")
+        #self.PersonDetector = cv.HOGDescriptor() # Pedestrian detection
+        #self.PersonDetector.setSVMDetector(cv.HOGDescriptor_getDefaultPeopleDetector())
+        
+        # MTCNN
+        #results = self.PersonDetector.detect_faces(frame)
+        #for person in results:
+        #    person_boxes.append(person["box"])
+        
+        # CASCASE CLASSIFIERS
+        person_boxes = self.PersonDetector.detectMultiScale(frame, 1.1, 3)
+        
+        # HOG
+        #(person_boxes, _) = self.PersonDetector.detectMultiScale(frame, winStride=(8, 8), padding=(4, 4), scale=1.05)
+        
         return person_boxes
     
     
@@ -140,9 +147,13 @@ class DementiaSimulator():
     
     def remove_background(self, frame):
         """ Remove the background image from the current frame"""
-        forground_mask = self.BackSub.apply(frame)
-        frame = cv.bitwise_and(frame, frame, mask= forground_mask)
-        return frame
+        frameDelta = cv.absdiff(self.BackgroundImage, frame)
+        thresh = cv.threshold(frameDelta, 25, 255, cv.THRESH_BINARY)[1]
+        # dilate the thresholded image to fill in holes, then find contours
+        # on thresholded image
+        thresh = cv.dilate(thresh, None, iterations=2)
+
+        return thresh
         
     
     # Process frame
@@ -153,41 +164,52 @@ class DementiaSimulator():
             return 0, 0
         
         # Get latest frame
+        t0 = time.time()
         original_image = self.Stream.read()
         
-        # Preprocess frame
+        # Preprocess framtime.time()        
+        t1 = time.time()
         frame = self.preprocess(original_image, downscale_num = downscale_num)
         
         # Remove background image
-        frame = self.remove_background(frame)        
+        t2 = time.time()
+        thresh = self.remove_background(frame)        
         
         # Detect people
+        t3 = time.time()
         crowdedness = 0.0
-        person_boxes = [[0,0,50,50]]#self.count_people(frame, self.FaceTrack)
+        person_boxes = self.count_people(frame)
         people_count = len(person_boxes)
         
         # Get average distance / closeness to target
+        t4 = time.time()
         crowdedness = self.compute_crowdedness(person_boxes)
-    
+
         # Display stream to user
+        t5 = time.time()
         if self.ShowCamera:
             # Draw bounding boxes
             for (x, y, w, h) in person_boxes:
                 dn = downscale_num if downscale_num < 1 else 1
                 cv.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 1)
                 # Scale up bounding box for original image
-                x, y, w, h = [x * dn, y * dn, w * dn, h * dn]
+                x, y, w, h = [x ** dn, y ** dn, w ** dn, h ** dn]
                 cv.rectangle(original_image, (x, y), (x + w, y + h), (0, 0, 255), 2)
                 cv.putText(original_image, "w = {}, h = {}".format(w, h), (x + 15, y - 15),
                            cv.FONT_HERSHEY_SIMPLEX, 0.5 , (0,0,0))
                 
             # Show img
             cv.imshow('Processed Stream', frame)
+            cv.imshow('temp', thresh)
             cv.imshow('Original Image', original_image)
             # if click q or on the X, then close stream. (keep processing though)
             if cv.waitKey(1) == ord('q'):# or cv.getWindowProperty('Camera Feed', 0) == -1:
                 self.ShowCamera = False
 
+        t6 = time.time()
+        t_total = t6 - t0
+        print("---\nTotal time = {}\n   Read frame: {} \n   Preprocess: {} \n   Remove background: {} \n   Detect people: {} \n   Get crowdedness: {} \n   Display image: {}".format( t_total, (t1 - t0), (t2 - t1 ), (t3 - t2 ), (t4 - t3 ), (t5 - t4 ), (t6 - t5)  ))
+        
         return people_count, crowdedness
 
     # Use pickle to load our previously saved drag points
@@ -537,13 +559,16 @@ class DementiaSimulator():
                 camera_pressed = toggle_camera_button.handle_event(event)
                 if camera_pressed:
                     self.UseStream = not self.UseStream
+                    # If stream was just turned on
                     if self.UseStream:
-                        self.PT.ShowCamera = True 
+                        # Take new background image
+                        self.BackgroundImage = self.Stream.read()
+                        self.BackgroundImage= self.preprocess(self.BackgroundImage, downscale_num = self.down_scale_num)
+                        self.ShowCamera = True # Re-enable the display
 
             # Get num of ppl and crowdedness from camera stream
             if self.UseStream:
-                #numberOnScreen, crowdedness = self.ProcessFrame(downscale_num = self.down_scale_num)
-                numberOnScreen, crowdedness = self.PT.ProcessFrame(downscale_num = self.down_scale_num)
+                numberOnScreen, crowdedness = self.ProcessFrame(downscale_num = self.down_scale_num)
 
             # If number on screen changed, change volume of speech
             if self.NumberOnScreen != numberOnScreen:
