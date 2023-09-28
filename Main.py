@@ -41,36 +41,39 @@ class DementiaSimulator():
         self.Crowdedness = 0
         self.CrowdednessMin = 0
         self.CrowdednessMax = 1
-        self.WidthFurthest = 10 # width of bounding box in pixels, when we consider person at max distance away
-        self.WidthClosest = 35 # width of bounding box in pixels, when we consider person at max distance away
         self.NumberOnScreen = 0
         self.MinPeople = 1   # How many people have to be on screen, before we change the audio
         self.MaxPeople = 10  # Num people on screen, where audio will be most transformed
         self.MonitorDPI = self.GetDPI()
         self.SpeakerPointsPos, self.NoisePointsPos = self.LoadData()
-        self.FPS = 30
+        self.FPS = 45
         self.Clock = pygame.time.Clock()
         self.SpeakerPoints = []
         self.SpeakerVolume = 1
         self.NoisePoints = []
         self.NoiseVolume = 0
-        self.CameraIndex = 0 #1
         self.SpeakerTRF = None
         self.NoiseTRF = None
         self.Stream = None
         self.ShowCamera = True
         self.CameraDown = False
         self.UseStream = False
-        self.Detector = None
         self.OpenFigures = []
         self.BackgroundImage = None
         self.AudioPath = "audio/"
-        self.NoiseFileName = "noise.mp3"
-        self.SpeechFileName = "speech.mp3"
         self.graphSize = [195, 387]
         self.SpeakerGraphOrigin = [88, 105]
         self.NoiseGraphOrigin = [88, 430]
-        self.down_scale_num = 2
+        
+        # Variables we need to tweak
+        self.CameraIndex = 0 #1
+        self.down_scale_num = 1
+        self.WidthFurthest = 55 # width of bounding box in pixels, when we consider person at max distance away
+        self.WidthClosest = 150 # width of bounding box in pixels, when we consider person at max distance away
+        self.dist_to_F = 2 # distance in m that we consider them, furthest away
+        self.dist_to_C = 0.3 # distance in m that we consider them maximally close
+        self.NoiseFileName = "noise.mp3"
+        self.SpeechFileName = "speech.mp3"
         
         
     # Detect Camera and establish a video stream
@@ -132,7 +135,7 @@ class DementiaSimulator():
         else:
             people_distance = []
             for box in person_boxes:
-                x, y, w, h = box
+                w= box[2]
                 if w < self.WidthFurthest:
                     people_distance.append(0)
                 elif w > self.WidthClosest:
@@ -144,6 +147,22 @@ class DementiaSimulator():
             crowdedness = np.mean(people_distance)
         return crowdedness
     
+    
+    def Estimate_distance(self, person_box):
+        """ Use rect of user to guess their distance in MM, using estimated min and max distance
+        """
+        # Compute crowdedness
+        w = person_box[2]
+        if w < self.WidthFurthest:
+            distance = "> {}m".format(round(self.dist_to_C + self.dist_to_F, 3))
+        elif w > self.WidthClosest:
+            distance = "< {}m".format(round(self.dist_to_C, 3))
+        else:
+            # percentage closeness within min and max. 0.5 = 50% of the distance from min - max
+            closeness = (w - self.WidthFurthest) / (self.WidthClosest - self.WidthFurthest)
+            distance = "~ {}m".format(round(((self.dist_to_F * (1 - closeness)) + self.dist_to_C), 3))
+        return distance
+
     
     def remove_background(self, frame):
         """ Remove the background image from the current frame"""
@@ -166,6 +185,7 @@ class DementiaSimulator():
         # Get latest frame
         t0 = time.time()
         original_image = self.Stream.read()
+        original_image = cv.flip(original_image,1)
         
         # Preprocess framtime.time()        
         t1 = time.time()
@@ -173,7 +193,7 @@ class DementiaSimulator():
         
         # Remove background image
         t2 = time.time()
-        thresh = self.remove_background(frame)        
+        #thresh = self.remove_background(frame)        
         
         # Detect people
         t3 = time.time()
@@ -189,18 +209,22 @@ class DementiaSimulator():
         t5 = time.time()
         if self.ShowCamera:
             # Draw bounding boxes
+            dn = downscale_num if downscale_num < 1 else 1
+            dn += 1
             for (x, y, w, h) in person_boxes:
-                dn = downscale_num if downscale_num < 1 else 1
                 cv.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 1)
+                
+                # Estimate their distance away, for fun
+                distance = self.Estimate_distance((x, y, w, h))
+                
                 # Scale up bounding box for original image
-                x, y, w, h = [x ** dn, y ** dn, w ** dn, h ** dn]
-                cv.rectangle(original_image, (x, y), (x + w, y + h), (0, 0, 255), 2)
-                cv.putText(original_image, "w = {}, h = {}".format(w, h), (x + 15, y - 15),
+                xs, ys, ws, hs = [x * dn, y * dn, w * dn, h * dn]
+                cv.rectangle(original_image, (xs, ys), (xs + ws, ys + hs), (0, 0, 255), 2)
+                cv.putText(original_image, "w = {}, h = {} distance = {}".format(w, h, distance), (xs + 15, ys - 15),
                            cv.FONT_HERSHEY_SIMPLEX, 0.5 , (0,0,0))
                 
             # Show img
-            cv.imshow('Processed Stream', frame)
-            cv.imshow('temp', thresh)
+            #cv.imshow('Processed Stream', frame)
             cv.imshow('Original Image', original_image)
             # if click q or on the X, then close stream. (keep processing though)
             if cv.waitKey(1) == ord('q'):# or cv.getWindowProperty('Camera Feed', 0) == -1:
@@ -562,8 +586,8 @@ class DementiaSimulator():
                     # If stream was just turned on
                     if self.UseStream:
                         # Take new background image
-                        self.BackgroundImage = self.Stream.read()
-                        self.BackgroundImage= self.preprocess(self.BackgroundImage, downscale_num = self.down_scale_num)
+                        #self.BackgroundImage = self.Stream.read()
+                        #self.BackgroundImage= self.preprocess(self.BackgroundImage, downscale_num = self.down_scale_num)
                         self.ShowCamera = True # Re-enable the display
 
             # Get num of ppl and crowdedness from camera stream
