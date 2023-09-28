@@ -3,16 +3,24 @@
 #python setup.py build_ext --inplace
 import cv2 as cv
 import numpy as np
+cimport numpy as cnp
 from mtcnn.mtcnn import MTCNN
+#from GameElementsLib import VideoCapture
+
+cnp.import_array()
+#DTYPE = np.int64
+#ctypedef cnp.int64_t DTYPE_t
+
 
 print("Person Tracker has been Imported")
 
 cdef class PersonTracker:
-    cdef int WidthFurthest
-    cdef int width_closest
-    cdef int ShowCamera # declare bools as ints
-    
-    def __init__(self, vc, width_furthest, width_closest):
+    cdef public int WidthFurthest
+    cdef public int WidthClosest
+    cdef public int ShowCamera # declare bools as ints too
+    cdef public vc, PersonDetector
+
+    def __init__(self, vc, int width_furthest, int width_closest):
         self.vc = vc
         
         self.WidthFurthest = width_furthest
@@ -26,7 +34,7 @@ cdef class PersonTracker:
         #self.PersonDetector.setSVMDetector(cv.HOGDescriptor_getDefaultPeopleDetector())
       
       
-    cdef preprocess(self, frame, int downscale_num = 0 ):
+    cdef cnp.ndarray preprocess(self, cnp.ndarray frame, int downscale_num = 0 ):
         """ Take frame and pre process according to our needs"""
         
         # Convert to grey scale to save processing
@@ -40,15 +48,14 @@ cdef class PersonTracker:
         return frame
 
 
-    def count_people(self, frame):
+    cdef list count_people(self, cnp.ndarray frame):
         """ Use selected technique (face track or HOG) to track how many people are on screen and return bounding boxes"""
-        person_boxes = []
+        cdef list results
+
+        # Detect people
         results = self.PersonDetector.detect_faces(frame)
-        #results = self.PersonDetector.detectMultiScale(frame, 1.1, 3)
-        for person in results:
-            person_boxes.append(person["box"])
-        #(person_boxes, _) = self.PersonDetector.detectMultiScale(frame, winStride=(8, 8), padding=(4, 4), scale=1.05)
-        return person_boxes
+
+        return results
 
 
     def compute_crowdedness(self, person_boxes):
@@ -111,7 +118,8 @@ cdef class PersonTracker:
         # Display stream to user
         if self.ShowCamera:
             # Draw bounding boxes
-            for (x, y, w, h) in person_boxes:
+            for person in person_boxes:
+                x, y, w, h = person["box"]
                 dn = downscale_num if downscale_num < 1 else 1
                 cv.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 1)
                 # Scale up bounding box for original image

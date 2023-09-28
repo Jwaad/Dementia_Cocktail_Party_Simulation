@@ -32,7 +32,8 @@ from GameElementsLib import InputBox
 from GameElementsLib import VideoCapture as VC
 from GameElementsLib import Button
 from person_tracker import PersonTracker
-    
+import cProfile
+
 class DementiaSimulator():
 
     def __init__(self):
@@ -71,17 +72,17 @@ class DementiaSimulator():
         self.NoiseGraphOrigin = [88, 430]
         self.down_scale_num = 2
         
-
-
+        
     # Detect Camera and establish a video stream
     def StartCameraStream(self):
         print("Starting Camera Stream. This might take a while...")
         self.Stream = VC(self.CameraIndex)
+        self.PT = PersonTracker(self.Stream, self.WidthFurthest, self.WidthClosest)
         if not self.Stream.cap.isOpened():
-            print("Cannot open camera")
+            print("Cannot open camera, shutting down")
+            self.r
             self.CameraDown = True
             return
-        self.PT = PersonTracker(self.Stream, self.WidthFurthest, self.WidthClosest)
         
         
     def preprocess(self, frame, downscale_num = 0 ):
@@ -596,8 +597,16 @@ class DementiaSimulator():
             # Lock program to fps
             self.Clock.tick(self.FPS)
 
+def profiler_run():
+    cProfile.run('DementiaSimulator().Main()')
 
 if __name__ == '__main__':
     print("Starting. This may take a while...")
-    dementiaSim = DementiaSimulator()
-    dementiaSim.Main()
+    
+    import cProfile, pstats
+    profiler = cProfile.Profile()
+    profiler.enable()
+    DementiaSimulator().Main()
+    profiler.disable()
+    stats = pstats.Stats(profiler).sort_stats('tottime')
+    stats.dump_stats('profile_data')
