@@ -46,7 +46,7 @@ class DementiaSimulator():
         self.MaxPeople = 10  # Num people on screen, where audio will be most transformed
         self.MonitorDPI = self.GetDPI()
         self.SpeakerPointsPos, self.NoisePointsPos = self.LoadData()
-        self.FPS = 45
+        self.FPS = 10
         self.Clock = pygame.time.Clock()
         self.SpeakerPoints = []
         self.SpeakerVolume = 1
@@ -66,14 +66,14 @@ class DementiaSimulator():
         self.NoiseGraphOrigin = [88, 430]
         
         # Variables we need to tweak
-        self.CameraIndex = 0 #1
-        self.down_scale_num = 1
-        self.WidthFurthest = 55 # width of bounding box in pixels, when we consider person at max distance away
-        self.WidthClosest = 150 # width of bounding box in pixels, when we consider person at max distance away
-        self.dist_to_F = 2 # distance in m that we consider them, furthest away
-        self.dist_to_C = 0.3 # distance in m that we consider them maximally close
-        self.NoiseFileName = "noise.mp3"
-        self.SpeechFileName = "speech.mp3"
+        self.CameraIndex = 1 #1
+        self.down_scale_num = 0
+        self.WidthFurthest = 70 # width of bounding box in pixels, when we consider person at max distance away
+        self.WidthClosest = 135 # width of bounding box in pixels, when we consider person at max distance away
+        self.dist_to_F = 3 # distance in m that we consider them, furthest away
+        self.dist_to_C = 0.5 # distance in m that we consider them maximally close
+        self.NoiseFileName = "noise.wav"
+        self.SpeechFileName = "speech.wav"
         
         
     # Detect Camera and establish a video stream
@@ -117,9 +117,7 @@ class DementiaSimulator():
         #    person_boxes.append(person["box"])
         
         # CASCASE CLASSIFIERS
-        person_boxes = self.PersonDetector.detectMultiScale(frame, 1.1, 3)
-        
-        # HOG
+        person_boxes = self.PersonDetector.detectMultiScale(frame, 1.1, 7)
         #(person_boxes, _) = self.PersonDetector.detectMultiScale(frame, winStride=(8, 8), padding=(4, 4), scale=1.05)
         
         return person_boxes
@@ -221,7 +219,7 @@ class DementiaSimulator():
                 xs, ys, ws, hs = [x * dn, y * dn, w * dn, h * dn]
                 cv.rectangle(original_image, (xs, ys), (xs + ws, ys + hs), (0, 0, 255), 2)
                 cv.putText(original_image, "w = {}, h = {} distance = {}".format(w, h, distance), (xs + 15, ys - 15),
-                           cv.FONT_HERSHEY_SIMPLEX, 0.5 , (0,0,0))
+                           cv.FONT_HERSHEY_SIMPLEX, 1 , (0,0,255))
                 
             # Show img
             #cv.imshow('Processed Stream', frame)
@@ -651,7 +649,10 @@ def profiler_run():
 
 if __name__ == '__main__':
     print("Starting. This may take a while...")
+
+    DementiaSimulator().Main()
     
+    """    
     import cProfile, pstats
     profiler = cProfile.Profile()
     profiler.enable()
@@ -659,3 +660,4 @@ if __name__ == '__main__':
     profiler.disable()
     stats = pstats.Stats(profiler).sort_stats('tottime')
     stats.dump_stats('profile_data')
+    """
