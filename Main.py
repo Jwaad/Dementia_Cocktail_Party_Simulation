@@ -31,6 +31,8 @@ from GameElementsLib import DragPoint
 from GameElementsLib import InputBox
 from GameElementsLib import VideoCapture as VC
 from GameElementsLib import Button
+from pathlib import Path
+import os
 #from mtcnn.mtcnn import MTCNN
 #import cProfile
 
@@ -42,11 +44,11 @@ class DementiaSimulator():
         self.CrowdednessMin = 0
         self.CrowdednessMax = 1
         self.NumberOnScreen = 0
-        self.MinPeople = 1   # How many people have to be on screen, before we change the audio
-        self.MaxPeople = 10  # Num people on screen, where audio will be most transformed
+        self.MinPeople = 0   # How many people have to be on screen, before we change the audio
+        self.MaxPeople = 1  # Num people on screen, where audio will be most transformed
         self.MonitorDPI = self.GetDPI()
         self.SpeakerPointsPos, self.NoisePointsPos = self.LoadData()
-        self.FPS = 10
+        self.FPS = 30
         self.Clock = pygame.time.Clock()
         self.SpeakerPoints = []
         self.SpeakerVolume = 1
@@ -61,12 +63,13 @@ class DementiaSimulator():
         self.OpenFigures = []
         self.BackgroundImage = None
         self.AudioPath = "audio/"
+        # self.AudioPath = os.path.join(Path().absolute(), "audio/")
         self.graphSize = [195, 387]
         self.SpeakerGraphOrigin = [88, 105]
         self.NoiseGraphOrigin = [88, 430]
         
         # Variables we need to tweak
-        self.CameraIndex = 1 #1
+        self.CameraIndex = 0 #1
         self.down_scale_num = 0
         self.WidthFurthest = 70 # width of bounding box in pixels, when we consider person at max distance away
         self.WidthClosest = 135 # width of bounding box in pixels, when we consider person at max distance away
@@ -319,19 +322,21 @@ class DementiaSimulator():
         graphWidth = self.graphSize[1] # 387
         x_start = self.SpeakerGraphOrigin[0]
 
-        # Step size for Speaker volume
-        stepSize = graphWidth / (self.MaxPeople - self.MinPeople)
-        if self.NumberOnScreen <= self.MinPeople:
+        # ---
+
+        # Step sizes and clamp noise to graph
+        if self.Crowdedness <= self.CrowdednessMin:
             x_pos = 0
-        elif self.NumberOnScreen >= self.MaxPeople:
-            x_pos = (self.MaxPeople - 1) * stepSize
+        elif self.Crowdedness >= self.CrowdednessMax:
+            x_pos = graphWidth
         else:
-            x_pos = (self.NumberOnScreen - self.MinPeople) * stepSize
+            x_pos = (self.Crowdedness * graphWidth)
 
         # Speaker
         y_origin = self.SpeakerGraphOrigin[1]
         pygame.draw.line(screen, colour, (x_start + x_pos, y_origin),
                          (x_start + x_pos, (y_origin + lineHeight)), 2)
+        
         # Draw volume
         text = font.render('{}%'.format(
             round(self.SpeakerVolume, 1)), True, colour)
@@ -348,15 +353,7 @@ class DementiaSimulator():
         textRect[0] = x_start + (self.graphSize[1] / 2) - (textRect[2]/2)
         textRect[1] = y_origin - (textRect[3]) - 45
         screen.blit(text, textRect)
-
-        # Step sizes and clamp noise to graph
-        if self.Crowdedness <= self.CrowdednessMin:
-            x_pos = 0
-        elif self.Crowdedness >= self.CrowdednessMax:
-            x_pos = graphWidth
-        else:
-            x_pos = (self.Crowdedness * graphWidth)
-
+        
         # Noise
         font = pygame.font.Font('freesansbold.ttf', 20)
         y_origin = self.NoiseGraphOrigin[1]
@@ -494,7 +491,9 @@ class DementiaSimulator():
         elif newCrowdedness > self.CrowdednessMax:
             newCrowdedness = self.CrowdednessMax
         self.NoiseVolume = float(self.NoiseTRF(newCrowdedness))
+        self.SpeakerVolume = float(self.SpeakerTRF(newCrowdedness))
         self.Crowdedness = newCrowdedness
+        self.channel1.set_volume(self.SpeakerVolume/100)
         self.channel2.set_volume(self.NoiseVolume/100)
 
     def StartAudio(self):
@@ -536,7 +535,7 @@ class DementiaSimulator():
         numberPeopleText = InputBox(575, 100, 50, 32)
         crowdednessText = InputBox(575, 400, 50, 32)
         self.StartAudio()  # Call on first loop to get %s to defaults
-        numberOnScreen = self.NumberOnScreen
+        #numberOnScreen = self.NumberOnScreen
         crowdedness = self.Crowdedness
         save_button = Button(700, 500, 50, 200, "Save Curves")
         toggle_camera_button = Button(650, 50, 100, 300, "TOGGLE CAMERA")
@@ -554,9 +553,9 @@ class DementiaSimulator():
                 self.CheckQuit(event)
                 
                 # Handle manual input for num of people
-                numberPeopleText.handle_event(event)
-                if numberPeopleText.returnInput != None:
-                    numberOnScreen = int(float(numberPeopleText.returnInput)) #float -> Int, to handle decimals
+                #numberPeopleText.handle_event(event)
+                #if numberPeopleText.returnInput != None:
+                #    numberOnScreen = int(float(numberPeopleText.returnInput)) #float -> Int, to handle decimals
                 # Handle manual input for crowdedness
                 crowdednessText.handle_event(event)
                 if crowdednessText.returnInput != None:
@@ -593,8 +592,8 @@ class DementiaSimulator():
                 numberOnScreen, crowdedness = self.ProcessFrame(downscale_num = self.down_scale_num)
 
             # If number on screen changed, change volume of speech
-            if self.NumberOnScreen != numberOnScreen:
-                self.OnNumPeopleChange(numberOnScreen)
+            #if self.NumberOnScreen != numberOnScreen:
+                #self.OnNumPeopleChange(numberOnScreen)
             # If average crowdedness changed, change volume of noise
             if self.Crowdedness != crowdedness:
                 self.OnCrowdednessChange(crowdedness)
@@ -642,7 +641,7 @@ class DementiaSimulator():
             pygame.display.update()
 
             # Lock program to fps
-            self.Clock.tick(self.FPS)
+            #self.Clock.tick(self.FPS)
 
 def profiler_run():
     cProfile.run('DementiaSimulator().Main()')
