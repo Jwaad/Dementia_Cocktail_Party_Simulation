@@ -13,7 +13,6 @@ To Do:
 Fix padding on plots
 """
 
-import sys
 import pickle
 import pygame
 import time
@@ -31,6 +30,7 @@ from GameElementsLib import VideoCapture as VC
 from GameElementsLib import Button
 from pathlib import Path
 import os
+from ctypes import windll
 #from mtcnn.mtcnn import MTCNN
 #import cProfile
 
@@ -44,7 +44,7 @@ class DementiaSimulator():
         self.NumberOnScreen = 0
         self.MinPeople = 0   # How many people have to be on screen, before we change the audio
         self.MaxPeople = 1  # Num people on screen, where audio will be most transformed
-        self.MonitorDPI = self.GetDPI()
+        self.DPI_H, self.DPI_V = self.GetDPI()
         self.SpeakerPointsPos, self.NoisePointsPos = self.LoadData()
         self.FPS = 30
         self.Clock = pygame.time.Clock()
@@ -280,11 +280,16 @@ class DementiaSimulator():
 
     # Get DPI of screen
     def GetDPI(self):
-        app = QApplication(sys.argv)
-        screen = app.screens()[0]
-        dpi = screen.physicalDotsPerInch()
-        app.quit()
-        return dpi
+        LOGPIXELSX = 88
+        LOGPIXELSY = 90
+        user32 = windll.user32
+        user32.SetProcessDPIAware()
+        dc = user32.GetDC(0)   
+        pix_per_inch = windll.gdi32.GetDeviceCaps(dc, LOGPIXELSX)
+        dpi_h = windll.gdi32.GetDeviceCaps(dc, LOGPIXELSX)
+        dpi_v =windll.gdi32.GetDeviceCaps(dc, LOGPIXELSY)
+        user32.ReleaseDC(0, dc)
+        return dpi_h, dpi_v
 
     # Create a GUI using pygame
     def InitScreen(self):
@@ -444,9 +449,9 @@ class DementiaSimulator():
         # Plot params
         matplotlib.use("Agg")
         # Convert pixels to inches, using DPI
-        x_inches = plot_size[0] / self.MonitorDPI
-        y_inches = plot_size[1] / self.MonitorDPI
-        fig = pylab.figure(figsize=[x_inches, y_inches], dpi=self.MonitorDPI)
+        x_inches = plot_size[0] / self.DPI_H
+        y_inches = plot_size[1] / self.DPI_V
+        fig = pylab.figure(figsize=[x_inches, y_inches], dpi=self.DPI_H)
         ax = fig.gca()
         ax.margins(x=0, y=0)
         ax.spines[['right', 'top']].set_visible(False)
@@ -672,14 +677,13 @@ class DementiaSimulator():
             #print("FPS =", 1/fTime)
             #self.Clock.tick(self.FPS)
 
-def profiler_run():
-    cProfile.run('DementiaSimulator().Main()')
+#def profiler_run():
+    #cProfile.run('DementiaSimulator().Main()')
 
 if __name__ == '__main__':
-    print("Starting. This may take a while...")
-
+    print("Starting. This may take a while...")#
     DementiaSimulator().Main()
-    
+        
     """    
     import cProfile, pstats
     profiler = cProfile.Profile()
