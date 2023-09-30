@@ -11,8 +11,6 @@ Speech volume changes based on the amount of people in the room.
 
 To Do:
 Fix padding on plots
-Multi thread computer vision code to make it less laggy
-Computer Vision code to recognise people.
 """
 
 import sys
