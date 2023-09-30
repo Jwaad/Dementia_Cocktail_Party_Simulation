@@ -179,6 +179,8 @@ class InputBox:
 
     def setText(self, text):
         self.text = text
+        self.txt_surface = self.FONT.render(
+                    self.text, True, self.color)
     
     def draw(self, screen):
         # Blit the text.
@@ -215,7 +217,12 @@ class VideoCapture:
             _, frame = self.cap.retrieve()
         return frame
 
-
+    # End steam safely
+    def EndSteam(self):
+        self.cap.release()
+        self.t.join()
+        
+        
 pg.init()
 class Checkbox:
     """

@@ -81,13 +81,24 @@ class DementiaSimulator():
     def StartCameraStream(self):
         print("Starting Camera Stream. This might take a while...")
         self.Stream = VC(self.CameraIndex)
+        self.CameraDown = False
         if not self.Stream.cap.isOpened():
-            print("Cannot open camera, shutting down")
+            print("Cannot open camera...")
             self.CameraDown = True
             return
-        self.BackgroundImage = self.Stream.read()
-        self.BackgroundImage= self.preprocess(self.BackgroundImage, downscale_num = self.down_scale_num)
-        
+        print("Camera started successfully")
+        #self.BackgroundImage = self.Stream.read()
+        #self.BackgroundImage= self.preprocess(self.BackgroundImage, downscale_num = self.down_scale_num)
+    
+    def EndCameraSteam(self):
+        print("Attempting to close current stream")
+        if not self.Stream.cap.isOpened():
+            print("No Steam found...")
+            return
+        else:
+            self.Stream.EndSteam()
+        print("Camera ended successfully")
+    
     def preprocess(self, frame, downscale_num = 0 ):
         """ Take frame and pre process according to our needs"""
         
@@ -218,17 +229,18 @@ class DementiaSimulator():
                 # Scale up bounding box for original image
                 xs, ys, ws, hs = [x * dn, y * dn, w * dn, h * dn] 
                 col = (0, 0, 255)
-                if w > self.WidthClosest or w < self.WidthFurthest:
+                if w > self.WidthClosest:
                     col = (255, 0, 0)
+                elif w < self.WidthFurthest:
+                    col = (0, 255, 0)
                 cv.rectangle(original_image, (xs, ys), (xs + ws, ys + hs), col, 3)
                 cv.putText(original_image, "w = {}, h = {} d = {}".format(w, h, distance), (xs + 15, ys - 15),
                            cv.FONT_HERSHEY_SIMPLEX, 1 , (0,0,255))
                 
             # Show img
-            #cv.imshow('Processed Stream', frame)
             cv.imshow('Original Image', original_image)
-            # if click q or on the X, then close stream. (keep processing though)
-            if cv.waitKey(1) == ord('q'):# or cv.getWindowProperty('Camera Feed', 0) == -1:
+            # if click q then close stream. (keep processing though)
+            if cv.waitKey(1) == ord('q'): # or cv.getWindowProperty('Camera Feed', 0) == -1:
                 self.ShowCamera = False
 
         t6 = time.time()
@@ -539,6 +551,13 @@ class DementiaSimulator():
         crowdedness = self.Crowdedness
         save_button = Button(700, 500, 50, 200, "Save Curves")
         toggle_camera_button = Button(650, 50, 100, 300, "TOGGLE CAMERA")
+        button_rect = toggle_camera_button.rect
+        
+        # Let user change camera index
+        minus_one = Button(725, 300, 25, 25, "<-")
+        camera_index = InputBox(750, 300, 25, 25)
+        plus_one = Button(775, 300, 25, 25, "->")
+        camera_index.setText(str(self.CameraIndex))
 
         # Workaround: Forces our first loop to calculate plots
         self.SpeakerPointsPos, self.NoisePointsPos = [], []
@@ -553,10 +572,6 @@ class DementiaSimulator():
                 self.CheckQuit(event)
                 
                 # Handle manual input for num of people
-                #numberPeopleText.handle_event(event)
-                #if numberPeopleText.returnInput != None:
-                #    numberOnScreen = int(float(numberPeopleText.returnInput)) #float -> Int, to handle decimals
-                # Handle manual input for crowdedness
                 crowdednessText.handle_event(event)
                 if crowdednessText.returnInput != None:
                     crowdedness = float(crowdednessText.returnInput)
@@ -571,6 +586,22 @@ class DementiaSimulator():
                     dragPoint.handle_event(event)
                     noisePointsPos.append(dragPoint.GetPercentageHeight())
                 
+                # Change 
+                plus = plus_one.handle_event(event)
+                minus = minus_one.handle_event(event)
+                if plus:
+                    if self.CameraIndex < 5:
+                        self.CameraIndex += 1
+                        self.EndCameraSteam()
+                        self.StartCameraStream()
+                        camera_index.setText(str(self.CameraIndex))
+                elif minus:
+                    if self.CameraIndex > 0:
+                        self.CameraIndex -= 1
+                        self.EndCameraSteam()
+                        self.StartCameraStream()
+                        camera_index.setText(str(self.CameraIndex))
+                    
                 # Let user save graphs if they like them
                 save_graph = save_button.handle_event(event)
                 if save_graph:
@@ -582,19 +613,13 @@ class DementiaSimulator():
                     self.UseStream = not self.UseStream
                     # If stream was just turned on
                     if self.UseStream:
-                        # Take new background image
-                        #self.BackgroundImage = self.Stream.read()
-                        #self.BackgroundImage= self.preprocess(self.BackgroundImage, downscale_num = self.down_scale_num)
                         self.ShowCamera = True # Re-enable the display
 
             # Get num of ppl and crowdedness from camera stream
             if self.UseStream:
                 numberOnScreen, crowdedness = self.ProcessFrame(downscale_num = self.down_scale_num)
 
-            # If number on screen changed, change volume of speech
-            #if self.NumberOnScreen != numberOnScreen:
-                #self.OnNumPeopleChange(numberOnScreen)
-            # If average crowdedness changed, change volume of noise
+            # If avg closeness changed
             if self.Crowdedness != crowdedness:
                 self.OnCrowdednessChange(crowdedness)
 
@@ -630,16 +655,21 @@ class DementiaSimulator():
                 dragPoint.Render(self.Screen)
             save_button.Render(self.Screen)
             toggle_camera_button.Render(self.Screen)
+            camera_index.draw(self.Screen)
+            plus_one.Render(self.Screen)
+            minus_one.Render(self.Screen)
             # While camera is active, draw red border around button
             if self.UseStream:
                 lw = 3
-                x, y, w, h = toggle_camera_button.rect
+                x, y, w, h = button_rect
                 pygame.draw.rect(self.Screen, (255,0,0), [x - lw, y - lw, w + (lw * 2), h + (lw * 2)], lw)
             
             # Update display
             pygame.display.update()
 
             # Lock program to fps
+            fTime = time.time() - t0
+            #print("FPS =", 1/fTime)
             #self.Clock.tick(self.FPS)
 
 def profiler_run():
