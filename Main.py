@@ -60,8 +60,8 @@ class DementiaSimulator():
         self.UseStream = False
         self.OpenFigures = []
         self.BackgroundImage = None
-        self.AudioPath = "audio/"
-        # self.AudioPath = os.path.join(Path().absolute(), "audio/")
+        #self.AudioPath = "audio/"
+        self.AudioPath = os.path.join(Path().absolute(), "audio/")
         self.graphSize = [195, 387]
         self.SpeakerGraphOrigin = [88, 105]
         self.NoiseGraphOrigin = [88, 430]
@@ -83,7 +83,6 @@ class DementiaSimulator():
         self.Stream = VC(self.CameraIndex)
         if not self.Stream.cap.isOpened():
             print("Cannot open camera, shutting down")
-            self.r
             self.CameraDown = True
             return
         self.BackgroundImage = self.Stream.read()
@@ -208,8 +207,8 @@ class DementiaSimulator():
         t5 = time.time()
         if self.ShowCamera:
             # Draw bounding boxes
-            dn = downscale_num if downscale_num < 1 else 1
-            dn += 1
+            #dn = downscale_num if downscale_num < 1 else 1
+            dn = downscale_num + 1
             for (x, y, w, h) in person_boxes:
                 cv.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 1)
                 
@@ -217,9 +216,12 @@ class DementiaSimulator():
                 distance = self.Estimate_distance((x, y, w, h))
                 
                 # Scale up bounding box for original image
-                xs, ys, ws, hs = [x * dn, y * dn, w * dn, h * dn]
-                cv.rectangle(original_image, (xs, ys), (xs + ws, ys + hs), (0, 0, 255), 2)
-                cv.putText(original_image, "w = {}, h = {} distance = {}".format(w, h, distance), (xs + 15, ys - 15),
+                xs, ys, ws, hs = [x * dn, y * dn, w * dn, h * dn] 
+                col = (0, 0, 255)
+                if w > self.WidthClosest or w < self.WidthFurthest:
+                    col = (255, 0, 0)
+                cv.rectangle(original_image, (xs, ys), (xs + ws, ys + hs), col, 3)
+                cv.putText(original_image, "w = {}, h = {} d = {}".format(w, h, distance), (xs + 15, ys - 15),
                            cv.FONT_HERSHEY_SIMPLEX, 1 , (0,0,255))
                 
             # Show img
@@ -630,9 +632,8 @@ class DementiaSimulator():
             toggle_camera_button.Render(self.Screen)
             # While camera is active, draw red border around button
             if self.UseStream:
-                button_rect = toggle_camera_button.rect
                 lw = 3
-                x, y, w, h = button_rect
+                x, y, w, h = toggle_camera_button.rect
                 pygame.draw.rect(self.Screen, (255,0,0), [x - lw, y - lw, w + (lw * 2), h + (lw * 2)], lw)
             
             # Update display
