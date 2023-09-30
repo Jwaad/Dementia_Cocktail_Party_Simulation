@@ -23,7 +23,6 @@ import pylab
 from scipy.interpolate import interp1d
 import numpy as np
 import cv2 as cv
-from PyQt5.QtWidgets import QApplication
 from GameElementsLib import DragPoint
 from GameElementsLib import InputBox
 from GameElementsLib import VideoCapture as VC
@@ -118,7 +117,7 @@ class DementiaSimulator():
         person_boxes = []
         
         #self.PersonDetector = MTCNN()
-        self.PersonDetector = cv.CascadeClassifier(cv.data.haarcascades + "haarcascade_frontalface_default.xml")
+        self.PersonDetector = cv.CascadeClassifier("haarcascade_frontalface_default.xml")
         #self.PersonDetector = cv.HOGDescriptor() # Pedestrian detection
         #self.PersonDetector.setSVMDetector(cv.HOGDescriptor_getDefaultPeopleDetector())
         
