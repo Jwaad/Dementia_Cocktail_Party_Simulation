@@ -35,9 +35,8 @@ class Button:
         pygame.draw.rect(screen, self.colour, self.rect, self.border, self.curve)
         if self.text != "":
             self.drawText(screen)
-        pygame.display.flip()
+        #pygame.display.flip()
 
-        
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.rect.collidepoint(event.pos):
@@ -178,6 +177,9 @@ class InputBox:
                 self.txt_surface = self.FONT.render(
                     self.text, True, self.color)
 
+    def setText(self, text):
+        self.text = text
+    
     def draw(self, screen):
         # Blit the text.
         screen.blit(self.txt_surface, (self.rect.x+5, self.rect.y+5))
