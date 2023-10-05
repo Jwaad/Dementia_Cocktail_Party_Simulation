@@ -64,6 +64,8 @@ class DementiaSimulator():
         self.graphSize = [195, 387]
         self.SpeakerGraphOrigin = [88, 105]
         self.NoiseGraphOrigin = [88, 430]
+        self.PreviousFaces = None
+        self.LostLog = {} # record of face lost at what pos, and at what time
         
         # Variables we need to tweak
         self.CameraIndex = 0 #1
@@ -182,12 +184,132 @@ class DementiaSimulator():
 
         return thresh
         
+        
+    def checkRectSimilar(self, rect1, rect2, percent_diff = 0.8):
+        """ 
+        Check if rect1 and rect2 are similar in x y w h by optional percentage given 
+        NOTE: moving too fast would mean you're now a missing person
+        """
+        # Loop through x y w h, and check if each of them are similar by given percente
+        for i in range(0,3):
+            if not (rect2[i] - (rect2[i]*percent_diff))  <= rect1[i] <= (rect2[i] + (rect2[i]*percent_diff)):
+                return False
+        return True
+        
+        
+    def check_face_lost(self, new_faces):
+        """ 
+        Compare new and previous faces, if we lose 1, then log when it's lost.
+        """        
+        # Guard statement
+        if self.PreviousFaces is None or len(self.PreviousFaces) < 1:
+            return
+        
+        # Check if face was lost
+        for prev_face in self.PreviousFaces:
+            # Find similar rect in new faces, else log lost face
+            similar_found = False
+            for new_face in new_faces:
+                similar = self.checkRectSimilar(prev_face, new_face)
+                if similar:
+                    similar_found = True
+            # If after looping through all faces, no similar rect was found -> make missing persons report
+            if not similar_found:
+                self.LostLog[time.time()] = prev_face
+               
+               
+    def check_face_found(self, new_faces):
+        """ Check if face has been reclaimed
+            i.e.: Check if new faces are in the prev frame. if not. assume that face is new
+            If it's new, check if it's one of the lost faces
+        """  
+                      
+        # Guard statement
+        if new_faces is None or len(new_faces) < 1:
+            return
+        
+        # Note: not using len, incase person A appears as person B disapears
+        # Check for any unaccounted for faces i.e: face that we didnt see last frame
+        for new_face in new_faces:
+            similar_found = False
+            if self.PreviousFaces is not None:
+                for prev_face in self.PreviousFaces:
+                    similar = self.checkRectSimilar(new_face, prev_face)
+                    if similar:
+                        similar_found = True
+            # Assume face is new person and check if they are in range to reclaim lost face
+            if not similar_found:
+                print("New Person Detected")
+                for (lost_face_key, lost_face_rect) in self.LostLog.items():
+                    similar = self.checkRectSimilar(new_face, lost_face_rect)
+                    if similar:
+                        print("Reclaimed a lost face")
+                        del self.LostLog[lost_face_key]
+                        break
+    
+        
+    def cullLostFaces(self, time_til_cull = 1.5):
+        """ If 5 seconds haved passed and a lost face is unclaimed, delete it"""
+        cull_times = self.LostLog.copy().keys()
+        for cull_time in cull_times:
+            if time.time() - cull_time > time_til_cull:
+                print("Culled a lost face")
+                del self.LostLog[cull_time]
+    
+    
+    def drawFaceBoxes(self, image, person_boxes, downscale_num = 0):
+        # Draw bounding boxes
+        #dn = downscale_num if downscale_num < 1 else 1
+        if person_boxes is None:
+            return image
+        if len(person_boxes) < 1:
+            return image
+        
+        dn = downscale_num + 1
+        for (x, y, w, h) in person_boxes:
+            
+            # Estimate their distance away, for fun
+            distance = self.Estimate_distance((x, y, w, h))
+            
+            # Scale up bounding box for original image
+            xs, ys, ws, hs = [x * dn, y * dn, w * dn, h * dn] 
+            colour = (0, 0, 255)
+            if w > self.WidthClosest:
+                colour = (255, 0, 0)
+            elif w < self.WidthFurthest:
+                colour = (0, 255, 0)
+            cv.rectangle(image, (xs, ys), (xs + ws, ys + hs), colour, 3)
+            cv.putText(image, "w = {}, h = {} d = {}".format(w, h, distance), (xs + 15, ys - 15),
+                        cv.FONT_HERSHEY_SIMPLEX, 1 , (0,0,255))
+        return image
+    
+    
+    def drawLostFaceBoxes(self, image, person_boxes, downscale_num = 0):
+        # Draw bounding boxes
+        # dn = downscale_num if downscale_num < 1 else 1
+        if person_boxes is None:
+            return image
+        if len(person_boxes) < 1:
+            return image
+            
+        dn = downscale_num + 1
+        for (x, y, w, h) in person_boxes:
+            
+            # Scale up bounding box for original image
+            xs, ys, ws, hs = [x * dn, y * dn, w * dn, h * dn] 
+            colour = (255, 255, 0)
+            cv.rectangle(image, (xs, ys), (xs + ws, ys + hs), colour, 3)
+            cv.putText(image, "LOST FACE", (xs + 15, ys - 15),
+                        cv.FONT_HERSHEY_SIMPLEX, 1 , (0,0,255))
+        return image
+    
     
     # Process frame
     def ProcessFrame(self, downscale_num = 0):
         "Get latest frame, and count faces"
         if self.CameraDown:
             print("Camera was not detected. Please restart the application")
+            time.sleep(0.2)
             return 0, 0
         
         # Get latest frame
@@ -196,55 +318,62 @@ class DementiaSimulator():
         original_image = cv.flip(original_image,1)
         
         # Preprocess framtime.time()        
-        t1 = time.time()
+        t10 = time.time()
         frame = self.preprocess(original_image, downscale_num = downscale_num)
         
         # Remove background image
-        t2 = time.time()
+        t20 = time.time()
         #thresh = self.remove_background(frame)        
         
         # Detect people
-        t3 = time.time()
+        t30 = time.time()
         crowdedness = 0.0
         person_boxes = self.count_people(frame)
         people_count = len(person_boxes)
         
+        #print(person_boxes, self.PreviousFaces)
+        
+        # Check if a face that was previously lost, has reappeared
+        t32 = time.time()
+        self.check_face_found(person_boxes) 
+        
+        # Check if between this and last frame, we lost a face
+        self.check_face_lost(person_boxes)
+        
+        # Get rid of lingering ghousts
+        self.cullLostFaces()
+        self.PreviousFaces = person_boxes
+        
+        # Display lost faces along with tracked faces
+        persons = []
+        lost_faces = []
+        if len(self.LostLog) > 0:
+            #for face in self.LostLog.values():
+            lost_faces = np.array(list(self.LostLog.values()))#.reshape(4,len(self.LostLog))
+            persons = lost_faces
+            if len(person_boxes) > 0:
+                persons = np.vstack((lost_faces, person_boxes))
+            
         # Get average distance / closeness to target
-        t4 = time.time()
-        crowdedness = self.compute_crowdedness(person_boxes)
+        t40 = time.time()
+        crowdedness = self.compute_crowdedness(persons)
 
         # Display stream to user
-        t5 = time.time()
+        t50 = time.time()
         if self.ShowCamera:
-            # Draw bounding boxes
-            #dn = downscale_num if downscale_num < 1 else 1
-            dn = downscale_num + 1
-            for (x, y, w, h) in person_boxes:
-                cv.rectangle(frame, (x, y), (x + w, y + h), (0, 0, 255), 1)
-                
-                # Estimate their distance away, for fun
-                distance = self.Estimate_distance((x, y, w, h))
-                
-                # Scale up bounding box for original image
-                xs, ys, ws, hs = [x * dn, y * dn, w * dn, h * dn] 
-                col = (0, 0, 255)
-                if w > self.WidthClosest:
-                    col = (255, 0, 0)
-                elif w < self.WidthFurthest:
-                    col = (0, 255, 0)
-                cv.rectangle(original_image, (xs, ys), (xs + ws, ys + hs), col, 3)
-                cv.putText(original_image, "w = {}, h = {} d = {}".format(w, h, distance), (xs + 15, ys - 15),
-                           cv.FONT_HERSHEY_SIMPLEX, 1 , (0,0,255))
-                
+            # Draw bounding boxes for faces and lost faces
+            original_image = self.drawFaceBoxes(original_image, person_boxes, downscale_num=downscale_num)
+            original_image = self.drawLostFaceBoxes(original_image, lost_faces, downscale_num=downscale_num)
+            
             # Show img
             cv.imshow('Original Image', original_image)
             # if click q then close stream. (keep processing though)
             if cv.waitKey(1) == ord('q'): # or cv.getWindowProperty('Camera Feed', 0) == -1:
                 self.ShowCamera = False
 
-        t6 = time.time()
-        t_total = t6 - t0
-        print("---\nTotal time = {}\n   Read frame: {} \n   Preprocess: {} \n   Remove background: {} \n   Detect people: {} \n   Get crowdedness: {} \n   Display image: {}".format( t_total, (t1 - t0), (t2 - t1 ), (t3 - t2 ), (t4 - t3 ), (t5 - t4 ), (t6 - t5)  ))
+        t60 = time.time()
+        t_total = t60 - t0
+        #print("---\nTotal time = {}\n   Read frame: {} \n   Preprocess: {} \n   Remove background: {} \n   Detect people: {} \n   Get Lost people: {} \n   Get crowdedness: {} \n   Display image: {}".format( t_total, (t10 - t0), (t20 - t10 ), (t30 - t20 ), (t32 - t30 ), (t40 - t32 ), (t50 - t40 ), (t60 - t50)  ))
         
         return people_count, crowdedness
 
@@ -692,3 +821,4 @@ if __name__ == '__main__':
     stats = pstats.Stats(profiler).sort_stats('tottime')
     stats.dump_stats('profile_data')
     """
+    
