@@ -88,6 +88,7 @@ class DementiaSimulator():
             self.CameraDown = True
             return
         self.BackgroundImage = self.Stream.read()
+        self.BackgroundImage = cv.flip(self.BackgroundImage, 1) # flip to match original image
         #self.BackgroundImage= self.preprocess(self.BackgroundImage, downscale_num = self.down_scale_num)
         print("Camera started successfully")
     
@@ -307,7 +308,8 @@ class DementiaSimulator():
         # Get latest frame
         t0 = time.time()
         original_image = self.Stream.read()
-        original_image = cv.flip(original_image,1)
+        original_image = cv.flip(original_image, 1) # For displaying
+        frame = original_image.copy() # For processing
         
         # Remove background image 
         t10 = time.time()
@@ -315,8 +317,8 @@ class DementiaSimulator():
         
         # Preprocess frame
         t20 = time.time()        
-        frame = self.preprocess(original_image, downscale_num = downscale_num)
-        
+        frame = self.preprocess(frame, downscale_num = downscale_num)
+            
         # Detect people
         t30 = time.time()
         crowdedness = 0.0
@@ -364,7 +366,7 @@ class DementiaSimulator():
 
         t60 = time.time()
         t_total = t60 - t0
-        print("---\nTotal time = {}\n   Read frame: {} \n   Remove background: {} \n   Preprocess: {} \n   Detect people: {} \n   Get Lost people: {} \n   Get crowdedness: {} \n   Display image: {}".format( t_total, (t10 - t0), (t20 - t10 ), (t30 - t20 ), (t32 - t30 ), (t40 - t32 ), (t50 - t40 ), (t60 - t50)  ))
+        print("---\nMax FPS = {}s \nTotal time = {}s\n   Read frame: {}s \n   Remove background: {}s \n   Preprocess: {}s \n   Detect people: {}s \n   Get Lost people: {}s \n   Get crowdedness: {}s \n   Display image: {}s".format( round(1 / t_total, 0), round(t_total, 4), round(t10 - t0, 4), round(t20 - t10, 4), round(t30 - t20, 4), round(t32 - t30, 4), round(t40 - t32, 4), round(t50 - t40, 4), round(t60 - t50, 4)))
         
         return people_count, crowdedness
 
