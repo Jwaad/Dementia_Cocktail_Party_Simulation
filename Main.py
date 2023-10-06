@@ -30,8 +30,8 @@ from GameElementsLib import Button
 from pathlib import Path
 import os
 from ctypes import windll
-#from mtcnn.mtcnn import MTCNN
-#import cProfile
+import cython
+import remove_background
 
 class DementiaSimulator():
 
@@ -87,9 +87,10 @@ class DementiaSimulator():
             print("Cannot open camera...")
             self.CameraDown = True
             return
-        print("Camera started successfully")
-        #self.BackgroundImage = self.Stream.read()
+        self.BackgroundImage = self.Stream.read()
         #self.BackgroundImage= self.preprocess(self.BackgroundImage, downscale_num = self.down_scale_num)
+        print("Camera started successfully")
+    
     
     def EndCameraSteam(self):
         print("Attempting to close current stream")
@@ -100,8 +101,9 @@ class DementiaSimulator():
             self.Stream.EndSteam()
         print("Camera ended successfully")
     
+    
     def preprocess(self, frame, downscale_num = 0 ):
-        """ Take frame and pre process according to our needs"""
+        """ Grey scale and pyramid down image"""
         
         # Convert to grey scale to save processing
         frame = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
@@ -173,17 +175,6 @@ class DementiaSimulator():
             distance = "~ {}m".format(round(((self.dist_to_F * (1 - closeness)) + self.dist_to_C), 3))
         return distance
 
-    
-    def remove_background(self, frame):
-        """ Remove the background image from the current frame"""
-        frameDelta = cv.absdiff(self.BackgroundImage, frame)
-        thresh = cv.threshold(frameDelta, 25, 255, cv.THRESH_BINARY)[1]
-        # dilate the thresholded image to fill in holes, then find contours
-        # on thresholded image
-        thresh = cv.dilate(thresh, None, iterations=2)
-
-        return thresh
-        
         
     def checkRectSimilar(self, rect1, rect2, percent_diff = 0.3):
         """ 
@@ -318,13 +309,13 @@ class DementiaSimulator():
         original_image = self.Stream.read()
         original_image = cv.flip(original_image,1)
         
-        # Preprocess framtime.time()        
+        # Remove background image 
         t10 = time.time()
-        frame = self.preprocess(original_image, downscale_num = downscale_num)
+        frame = remove_background.cRemove_background(frame, self.BackgroundImage, 0.4)
         
-        # Remove background image
-        t20 = time.time()
-        #thresh = self.remove_background(frame)        
+        # Preprocess frame
+        t20 = time.time()        
+        frame = self.preprocess(original_image, downscale_num = downscale_num)
         
         # Detect people
         t30 = time.time()
@@ -366,13 +357,14 @@ class DementiaSimulator():
             
             # Show img
             cv.imshow('Original Image', original_image)
+            cv.imshow('Processed frame', frame)
             # if click q then close stream. (keep processing though)
             if cv.waitKey(1) == ord('q'): # or cv.getWindowProperty('Camera Feed', 0) == -1:
                 self.ShowCamera = False
 
         t60 = time.time()
         t_total = t60 - t0
-        #print("---\nTotal time = {}\n   Read frame: {} \n   Preprocess: {} \n   Remove background: {} \n   Detect people: {} \n   Get Lost people: {} \n   Get crowdedness: {} \n   Display image: {}".format( t_total, (t10 - t0), (t20 - t10 ), (t30 - t20 ), (t32 - t30 ), (t40 - t32 ), (t50 - t40 ), (t60 - t50)  ))
+        print("---\nTotal time = {}\n   Read frame: {} \n   Remove background: {} \n   Preprocess: {} \n   Detect people: {} \n   Get Lost people: {} \n   Get crowdedness: {} \n   Display image: {}".format( t_total, (t10 - t0), (t20 - t10 ), (t30 - t20 ), (t32 - t30 ), (t40 - t32 ), (t50 - t40 ), (t60 - t50)  ))
         
         return people_count, crowdedness
 
