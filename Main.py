@@ -185,7 +185,7 @@ class DementiaSimulator():
         return thresh
         
         
-    def checkRectSimilar(self, rect1, rect2, percent_diff = 0.8):
+    def checkRectSimilar(self, rect1, rect2, percent_diff = 0.3):
         """ 
         Check if rect1 and rect2 are similar in x y w h by optional percentage given 
         NOTE: moving too fast would mean you're now a missing person
@@ -216,6 +216,7 @@ class DementiaSimulator():
             # If after looping through all faces, no similar rect was found -> make missing persons report
             if not similar_found:
                 self.LostLog[time.time()] = prev_face
+                print("Lost a face")
                
                
     def check_face_found(self, new_faces):
@@ -330,9 +331,7 @@ class DementiaSimulator():
         crowdedness = 0.0
         person_boxes = self.count_people(frame)
         people_count = len(person_boxes)
-        
-        #print(person_boxes, self.PreviousFaces)
-        
+                
         # Check if a face that was previously lost, has reappeared
         t32 = time.time()
         self.check_face_found(person_boxes) 
@@ -345,14 +344,14 @@ class DementiaSimulator():
         self.PreviousFaces = person_boxes
         
         # Display lost faces along with tracked faces
-        persons = []
-        lost_faces = []
-        if len(self.LostLog) > 0:
-            #for face in self.LostLog.values():
-            lost_faces = np.array(list(self.LostLog.values()))#.reshape(4,len(self.LostLog))
+        lost_faces = np.array(list(self.LostLog.values()))
+        persons = person_boxes # default = just person faces
+        # If there's lost faces and detected faces, use both
+        if len(self.LostLog) > 0 and len(person_boxes) > 0:
+            persons = np.vstack((lost_faces, person_boxes))
+        # If there's just lost faces use only those
+        elif len(self.LostLog) > 0 and len(person_boxes) < 0 :
             persons = lost_faces
-            if len(person_boxes) > 0:
-                persons = np.vstack((lost_faces, person_boxes))
             
         # Get average distance / closeness to target
         t40 = time.time()
